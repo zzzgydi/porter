@@ -1,10 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FolderKanban, Container, Users, KeyRound } from 'lucide-react'
 
 export function DashboardPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'platform_admin'
+
   const { data: projects, isLoading: pLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: api.projects.list,
@@ -12,6 +16,7 @@ export function DashboardPage() {
   const { data: users, isLoading: uLoading } = useQuery({
     queryKey: ['users'],
     queryFn: api.users.list,
+    enabled: isAdmin,
   })
   const { data: robots, isLoading: rLoading } = useQuery({
     queryKey: ['robots'],
@@ -20,7 +25,7 @@ export function DashboardPage() {
 
   const stats = [
     { title: 'Projects', value: projects?.length ?? 0, icon: FolderKanban, loading: pLoading },
-    { title: 'Users', value: users?.length ?? 0, icon: Users, loading: uLoading },
+    ...(isAdmin ? [{ title: 'Users', value: users?.length ?? 0, icon: Users, loading: uLoading }] : []),
     { title: 'Robot Tokens', value: robots?.length ?? 0, icon: KeyRound, loading: rLoading },
   ]
 

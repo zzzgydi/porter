@@ -76,6 +76,10 @@ func (s *Service) Authenticate(ctx context.Context, username, password string) (
 	return t, nil
 }
 
+func (s *Service) GetByID(ctx context.Context, id string) (*RobotToken, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
 func (s *Service) ListByProject(ctx context.Context, projectID string) ([]RobotToken, error) {
 	return s.repo.ListByProject(ctx, projectID)
 }

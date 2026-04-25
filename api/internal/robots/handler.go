@@ -7,17 +7,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/porter/api/internal/session"
 	"github.com/porter/api/internal/httpx"
+	"github.com/porter/api/internal/members"
 	"github.com/porter/api/internal/projects"
 )
 
 type Handler struct {
 	service     *Service
 	projectsSvc *projects.Service
+	membersSvc  *members.Service
 	sessionMgr  *session.Manager
 }
 
-func NewHandler(service *Service, projectsSvc *projects.Service, sessionMgr *session.Manager) *Handler {
-	return &Handler{service: service, projectsSvc: projectsSvc, sessionMgr: sessionMgr}
+func NewHandler(service *Service, projectsSvc *projects.Service, membersSvc *members.Service, sessionMgr *session.Manager) *Handler {
+	return &Handler{service: service, projectsSvc: projectsSvc, membersSvc: membersSvc, sessionMgr: sessionMgr}
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -26,8 +28,60 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Delete("/{id}", h.Revoke)
 }
 
+func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Role == "platform_admin" {
+		return claims, nil
+	}
+	_, err = h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
+	if err != nil {
+		return nil, httpx.Forbidden("not a project member")
+	}
+	return claims, nil
+}
+
+func (h *Handler) requireProjectDeveloper(r *http.Request, projectID string) (*session.Claims, error) {
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Role == "platform_admin" {
+		return claims, nil
+	}
+	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
+	if err != nil {
+		return nil, httpx.Forbidden("not a project member")
+	}
+	if role != "developer" && role != "owner" {
+		return nil, httpx.Forbidden("developer or owner required")
+	}
+	return claims, nil
+}
+
+func (h *Handler) requireProjectOwner(r *http.Request, projectID string) (*session.Claims, error) {
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Role == "platform_admin" {
+		return claims, nil
+	}
+	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
+	if err != nil {
+		return nil, httpx.Forbidden("not a project member")
+	}
+	if role != "owner" {
+		return nil, httpx.Forbidden("owner required")
+	}
+	return claims, nil
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	if _, err := session.FromRequest(h.sessionMgr, r); err != nil {
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
 		httpx.JSONError(w, httpx.Unauthorized("session required"))
 		return
 	}
@@ -38,12 +92,21 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			httpx.JSONError(w, httpx.NotFound("project not found"))
 			return
 		}
+		if _, err := h.requireProjectMember(r, p.ID); err != nil {
+			httpx.JSONError(w, err)
+			return
+		}
 		list, err := h.service.ListByProject(r.Context(), p.ID)
 		if err != nil {
 			httpx.JSONError(w, httpx.Internal("db error"))
 			return
 		}
 		httpx.JSON(w, http.StatusOK, list)
+		return
+	}
+	// list all requires platform_admin
+	if claims.Role != "platform_admin" {
+		httpx.JSONError(w, httpx.Forbidden("admin required"))
 		return
 	}
 	list, err := h.service.ListAll(r.Context())
@@ -55,10 +118,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	if _, err := session.FromRequest(h.sessionMgr, r); err != nil {
-		httpx.JSONError(w, httpx.Unauthorized("session required"))
-		return
-	}
 	var req struct {
 		ProjectID   string              `json:"project_id"`
 		Name        string              `json:"name"`
@@ -66,6 +125,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.JSONError(w, httpx.BadRequest("invalid body"))
+		return
+	}
+	if _, err := h.requireProjectOwner(r, req.ProjectID); err != nil {
+		httpx.JSONError(w, err)
 		return
 	}
 	t, tokenRaw, err := h.service.Create(r.Context(), req.ProjectID, req.Name, req.Permissions)
@@ -82,11 +145,29 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
-	if _, err := session.FromRequest(h.sessionMgr, r); err != nil {
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
 		httpx.JSONError(w, httpx.Unauthorized("session required"))
 		return
 	}
 	id := chi.URLParam(r, "id")
+	// fetch token to check project membership
+	t, err := h.service.GetByID(r.Context(), id)
+	if err != nil {
+		httpx.JSONError(w, httpx.NotFound("token not found"))
+		return
+	}
+	if claims.Role != "platform_admin" {
+		role, err := h.membersSvc.Repo().GetRole(r.Context(), t.ProjectID, claims.UserID)
+		if err != nil {
+			httpx.JSONError(w, httpx.Forbidden("not a project member"))
+			return
+		}
+		if role != "owner" {
+			httpx.JSONError(w, httpx.Forbidden("owner required"))
+			return
+		}
+	}
 	if err := h.service.Revoke(r.Context(), id); err != nil {
 		httpx.JSONError(w, httpx.Internal("revoke failed"))
 		return

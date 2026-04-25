@@ -3,11 +3,28 @@ package users
 import (
 	"encoding/json"
 	"net/http"
+	"net/mail"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/porter/api/internal/session"
 	"github.com/porter/api/internal/httpx"
 )
+
+var validUserRoles = map[string]bool{"user": true, "platform_admin": true}
+
+func validateUserInput(email, password, role string) error {
+	if _, err := mail.ParseAddress(email); err != nil {
+		return httpx.BadRequest("invalid email")
+	}
+	if len(password) < 8 {
+		return httpx.BadRequest("password must be at least 8 characters")
+	}
+	if role != "" && !validUserRoles[role] {
+		return httpx.BadRequest("invalid role")
+	}
+	return nil
+}
 
 type Handler struct {
 	service    *Service
@@ -77,6 +94,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.JSONError(w, httpx.BadRequest("invalid body"))
+		return
+	}
+	if err := validateUserInput(req.Email, req.Password, req.Role); err != nil {
+		httpx.JSONError(w, err)
 		return
 	}
 	u, err := h.service.Create(r.Context(), req.Email, req.Name, req.Password, req.Role)

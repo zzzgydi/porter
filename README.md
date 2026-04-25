@@ -246,6 +246,7 @@ DELETE /api/projects/:project/members/:userId
 GET    /api/projects/:project/repositories
 GET    /api/projects/:project/repositories/:repo
 GET    /api/projects/:project/repositories/:repo/tags
+GET    /api/projects/:project/repositories/:repo/tags/:tag
 DELETE /api/projects/:project/repositories/:repo/tags/:tag
 GET    /api/robot-tokens
 POST   /api/robot-tokens

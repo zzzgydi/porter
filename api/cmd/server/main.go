@@ -82,7 +82,7 @@ func main() {
 	tagsSvc := tags.NewService(tagsRepo)
 
 	auditRepo := audit.NewRepo(pool)
-	auditSvc := audit.NewService(auditRepo)
+	auditSvc := audit.NewService(auditRepo, logger)
 
 	// Registry token signer
 	signer, err := registrytoken.NewSigner(cfg.RegistryTokenKey)

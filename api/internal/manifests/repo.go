@@ -7,11 +7,10 @@ import (
 )
 
 type Manifest struct {
-	Digest       string `json:"digest"`
-	RepositoryID string `json:"repository_id"`
-	MediaType    string `json:"media_type"`
-	SizeBytes    int64  `json:"size_bytes"`
-	ContentJSON  []byte `json:"content_json,omitempty"`
+	Digest      string `json:"digest"`
+	MediaType   string `json:"media_type"`
+	SizeBytes   int64  `json:"size_bytes"`
+	ContentJSON []byte `json:"content_json,omitempty"`
 }
 
 type Repo struct {
@@ -24,14 +23,13 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 
 func (r *Repo) Upsert(ctx context.Context, m *Manifest) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO manifests (digest, repository_id, media_type, size_bytes, content_json)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO manifests (digest, media_type, size_bytes, content_json)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (digest) DO UPDATE SET
-			repository_id = EXCLUDED.repository_id,
 			media_type = EXCLUDED.media_type,
 			size_bytes = EXCLUDED.size_bytes,
 			content_json = EXCLUDED.content_json,
 			pushed_at = now()
-	`, m.Digest, m.RepositoryID, m.MediaType, m.SizeBytes, m.ContentJSON)
+	`, m.Digest, m.MediaType, m.SizeBytes, m.ContentJSON)
 	return err
 }

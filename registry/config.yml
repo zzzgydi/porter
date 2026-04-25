@@ -10,12 +10,12 @@ http:
 
 storage:
   s3:
-    accesskey: CHANGE_ME_R2_ACCESS_KEY_ID
-    secretkey: CHANGE_ME_R2_SECRET_ACCESS_KEY
+    accesskey: ${R2_ACCESS_KEY_ID}
+    secretkey: ${R2_SECRET_ACCESS_KEY}
     region: auto
-    regionendpoint: https://CHANGE_ME_R2_ACCOUNT_ID.r2.cloudflarestorage.com
+    regionendpoint: https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com
     forcepathstyle: true
-    bucket: CHANGE_ME_R2_BUCKET_NAME
+    bucket: ${R2_BUCKET_NAME}
     secure: true
     v4auth: true
     chunksize: 5242880
@@ -39,19 +39,20 @@ storage:
 redis:
   addrs:
     - redis:6379
-  password: CHANGE_ME_REDIS_PASSWORD
+  password: ${REDIS_PASSWORD}
   db: 0
-  dialtimeout: 10ms
-  readtimeout: 10ms
-  writetimeout: 10ms
+  dialtimeout: 500ms
+  readtimeout: 500ms
+  writetimeout: 500ms
   poolsize: 64
 
 auth:
   token:
-    realm: https://console.registry.example.com/api/registry/token
-    service: registry.example.com
-    issuer: private-registry-auth
+    realm: ${REGISTRY_TOKEN_REALM}
+    service: ${REGISTRY_SERVICE}
+    issuer: ${REGISTRY_TOKEN_ISSUER}
     rootcertbundle: /certs/auth.crt
+    jwks: /certs/jwks.json
     signingalgorithms:
       - RS256
 
@@ -64,10 +65,11 @@ notifications:
       url: http://registry-api:3000/internal/registry/events
       headers:
         Authorization:
-          - Bearer CHANGE_ME_WEBHOOK_SECRET
+          - Bearer ${WEBHOOK_SECRET}
       timeout: 3s
       threshold: 10
       backoff: 5s
+      insecure: true
       ignore:
         actions:
           - pull

@@ -3,11 +3,30 @@ package httpx
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
+
+func ClientIP(r *http.Request) string {
+	ip := r.Header.Get("X-Real-IP")
+	if ip == "" {
+		ip = r.Header.Get("X-Forwarded-For")
+		if ip != "" {
+			// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2
+			// Take the first one (the actual client)
+			if idx := strings.Index(ip, ","); idx != -1 {
+				ip = strings.TrimSpace(ip[:idx])
+			}
+		}
+	}
+	if ip == "" {
+		ip = r.RemoteAddr
+	}
+	return ip
+}
 
 func RequestID(next http.Handler) http.Handler {
 	return middleware.RequestID(next)
@@ -24,7 +43,7 @@ func Logger(logger *slog.Logger) func(http.Handler) http.Handler {
 				"path", r.URL.Path,
 				"status", ww.Status(),
 				"duration", time.Since(start).String(),
-				"remote", r.RemoteAddr,
+				"remote", ClientIP(r),
 			)
 		})
 	}

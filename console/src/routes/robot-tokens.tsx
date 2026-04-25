@@ -15,6 +15,7 @@ export function RobotTokensPage() {
   const [name, setName] = useState('')
   const [perms, setPerms] = useState('pull,push')
   const [createdToken, setCreatedToken] = useState('')
+  const [error, setError] = useState('')
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({ queryKey: ['robots'], queryFn: () => api.robots.list() })
@@ -36,12 +37,15 @@ export function RobotTokensPage() {
       setProjectName('')
       setName('')
       setPerms('pull,push')
+      setError('')
     },
+    onError: (err: Error) => setError(err.message),
   })
 
   const revoke = useMutation({
     mutationFn: (id: string) => api.robots.revoke(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['robots'] }),
+    onError: (err: Error) => setError(err.message),
   })
 
   return (
@@ -50,6 +54,8 @@ export function RobotTokensPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2"><KeyRound className="h-6 w-6" />Robot Tokens</h1>
         <Button onClick={() => setOpen(true)}>New Token</Button>
       </div>
+
+      {error && !open && <p className="text-sm text-destructive">{error}</p>}
 
       {createdToken && (
         <Card className="border-primary bg-primary/5">
@@ -111,9 +117,10 @@ export function RobotTokensPage() {
               <label className="text-sm font-medium">Permissions</label>
               <Input value={perms} onChange={(e) => setPerms(e.target.value)} placeholder="e.g. pull,push" />
             </div>
+            {error && open && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button onClick={() => create.mutate()} disabled={!projectName || !name}>Create</Button>
+            <Button onClick={() => create.mutate()} disabled={!projectName || !name || create.isPending}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

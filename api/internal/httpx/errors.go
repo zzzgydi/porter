@@ -17,6 +17,7 @@ func Unauthorized(msg string) error    { return HTTPError{Code: http.StatusUnaut
 func Forbidden(msg string) error       { return HTTPError{Code: http.StatusForbidden, Message: msg} }
 func NotFound(msg string) error        { return HTTPError{Code: http.StatusNotFound, Message: msg} }
 func Conflict(msg string) error        { return HTTPError{Code: http.StatusConflict, Message: msg} }
+func TooManyRequests(msg string) error { return HTTPError{Code: http.StatusTooManyRequests, Message: msg} }
 func Internal(msg string) error        { return HTTPError{Code: http.StatusInternalServerError, Message: msg} }
 
 func JSONError(w http.ResponseWriter, err error) {
@@ -24,6 +25,7 @@ func JSONError(w http.ResponseWriter, err error) {
 	if e, ok := err.(HTTPError); ok {
 		he = e
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(he.Code)
 	_ = json.NewEncoder(w).Encode(he)
 }

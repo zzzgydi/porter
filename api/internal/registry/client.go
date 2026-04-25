@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -13,6 +14,7 @@ type Client struct {
 	baseURL string
 	signer  *registrytoken.Signer
 	service string
+	client  *http.Client
 }
 
 func NewClient(baseURL string, signer *registrytoken.Signer, service string) *Client {
@@ -20,6 +22,7 @@ func NewClient(baseURL string, signer *registrytoken.Signer, service string) *Cl
 		baseURL: baseURL,
 		signer:  signer,
 		service: service,
+		client:  &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -44,11 +47,14 @@ func (c *Client) DeleteManifest(ctx context.Context, repoName, digest string) er
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("registry delete request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("registry delete returned %d", resp.StatusCode)

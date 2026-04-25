@@ -3,13 +3,16 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { LogOut, User } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 
 export function Header() {
   const { user, setUser } = useAuth()
   const navigate = useNavigate()
+  const qc = useQueryClient()
 
   async function handleLogout() {
     await api.logout()
+    qc.clear()
     setUser(null)
     navigate('/login')
   }

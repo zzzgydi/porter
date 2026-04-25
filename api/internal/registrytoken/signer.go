@@ -93,11 +93,14 @@ func deriveKid(key *rsa.PrivateKey) string {
 	// RFC 7638 JWK thumbprint for RSA: SHA256 of {"e":"...","kty":"RSA","n":"..."}
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
 	n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
-	jwkJSON, _ := json.Marshal(map[string]string{
+	jwkJSON, err := json.Marshal(map[string]string{
 		"e":   e,
 		"kty": "RSA",
 		"n":   n,
 	})
+	if err != nil {
+		panic(fmt.Sprintf("jwk marshal failed: %v", err))
+	}
 	hash := sha256.Sum256(jwkJSON)
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }

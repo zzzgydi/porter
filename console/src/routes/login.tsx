@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,7 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const qc = useQueryClient()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -20,9 +22,11 @@ export function LoginPage() {
     setLoading(true)
     try {
       await api.login(email, password)
+      qc.invalidateQueries({ queryKey: ['me'] })
       navigate('/dashboard')
-    } catch {
-      setError('Invalid credentials')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid credentials'
+      setError(msg)
     } finally {
       setLoading(false)
     }

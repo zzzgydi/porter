@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/porter/api/internal/httpx"
+	"github.com/porter/api/internal/redisx"
 	"github.com/porter/api/internal/session"
 	"github.com/porter/api/internal/users"
 )
@@ -14,12 +15,16 @@ import (
 type Handler struct {
 	sessionMgr *session.Manager
 	usersSvc   *users.Service
+	redis      *redisx.Client
+	secure     bool
 }
 
-func NewHandler(sessionMgr *session.Manager, usersSvc *users.Service) *Handler {
+func NewHandler(sessionMgr *session.Manager, usersSvc *users.Service, redis *redisx.Client, secure bool) *Handler {
 	return &Handler{
 		sessionMgr: sessionMgr,
 		usersSvc:   usersSvc,
+		redis:      redis,
+		secure:     secure,
 	}
 }
 
@@ -48,6 +53,13 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	limitKey := "ratelimit:login:" + httpx.ClientIP(r)
+	ok, err := h.redis.RateLimit(r.Context(), limitKey, 5, time.Minute)
+	if err != nil || !ok {
+		httpx.JSONError(w, httpx.TooManyRequests("too many login attempts"))
+		return
+	}
+
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -66,7 +78,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.JSONError(w, httpx.Internal("session error"))
 		return
 	}
-	http.SetCookie(w, h.sessionMgr.Cookie(token))
+	http.SetCookie(w, h.sessionMgr.Cookie(token, h.secure))
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"id":    u.ID,
 		"email": u.Email,
@@ -82,6 +94,8 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   h.secure,
+		SameSite: http.SameSiteLaxMode,
 	})
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }

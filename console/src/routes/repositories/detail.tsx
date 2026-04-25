@@ -11,18 +11,26 @@ import { Copy, Trash2, Container, ArrowLeft } from 'lucide-react'
 export function RepositoryDetailPage() {
   const { project, repo } = useParams<{ project: string; repo: string }>()
   const [deleteTag, setDeleteTag] = useState<string | null>(null)
+  const [error, setError] = useState('')
   const qc = useQueryClient()
+
+  if (!project || !repo) {
+    return <div className="p-6 text-destructive">Repository not found</div>
+  }
+
   const fullName = `${project}/${repo}`
 
-  const { data: repository } = useQuery({ queryKey: ['repository', project, repo], queryFn: () => api.repositories.get(project!, repo!) })
-  const { data: tags, isLoading } = useQuery({ queryKey: ['tags', project, repo], queryFn: () => api.tags.list(project!, repo!) })
+  const { data: repository } = useQuery({ queryKey: ['repository', project, repo], queryFn: () => api.repositories.get(project, repo) })
+  const { data: tags, isLoading } = useQuery({ queryKey: ['tags', project, repo], queryFn: () => api.tags.list(project, repo) })
 
   const del = useMutation({
-    mutationFn: (tag: string) => api.tags.delete(project!, repo!, tag),
+    mutationFn: (tag: string) => api.tags.delete(project, repo, tag),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tags', project, repo] })
       setDeleteTag(null)
+      setError('')
     },
+    onError: (err: Error) => setError(err.message),
   })
 
   function copyPull(tag: string) {
@@ -94,9 +102,10 @@ export function RepositoryDetailPage() {
             <DialogTitle>Delete Tag</DialogTitle>
             <DialogDescription>Are you sure you want to delete tag "{deleteTag}"? This action cannot be undone.</DialogDescription>
           </DialogHeader>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTag(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteTag && del.mutate(deleteTag)}>Delete</Button>
+            <Button variant="outline" onClick={() => { setDeleteTag(null); setError('') }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => del.mutate(deleteTag)} disabled={del.isPending}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

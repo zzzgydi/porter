@@ -9,9 +9,12 @@ import { Users, FolderKanban, Container } from 'lucide-react'
 
 export function ProjectDetailPage() {
   const { project } = useParams<{ project: string }>()
-  const { data: p } = useQuery({ queryKey: ['project', project], queryFn: () => api.projects.get(project!) })
-  const { data: repos } = useQuery({ queryKey: ['repositories', project], queryFn: () => api.repositories.list(project!) })
-  const { data: members } = useQuery({ queryKey: ['members', project], queryFn: () => api.projects.members.list(project!) })
+  if (!project) {
+    return <div className="p-6 text-destructive">Project not found</div>
+  }
+  const { data: p } = useQuery({ queryKey: ['project', project], queryFn: () => api.projects.get(project) })
+  const { data: repos } = useQuery({ queryKey: ['repositories', project], queryFn: () => api.repositories.list(project) })
+  const { data: members } = useQuery({ queryKey: ['members', project], queryFn: () => api.projects.members.list(project) })
 
   return (
     <div className="space-y-6">

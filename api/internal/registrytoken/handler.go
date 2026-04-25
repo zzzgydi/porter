@@ -10,6 +10,7 @@ import (
 	"github.com/porter/api/internal/httpx"
 	"github.com/porter/api/internal/members"
 	"github.com/porter/api/internal/projects"
+	"github.com/porter/api/internal/redisx"
 	"github.com/porter/api/internal/robots"
 	"github.com/porter/api/internal/users"
 )
@@ -20,6 +21,7 @@ type Handler struct {
 	robotsSvc   *robots.Service
 	projectsSvc *projects.Service
 	membersRepo *members.Repo
+	redis       *redisx.Client
 	issuer      string
 	service     string
 	ttl         time.Duration
@@ -31,6 +33,7 @@ func NewHandler(
 	robotsSvc *robots.Service,
 	projectsSvc *projects.Service,
 	membersRepo *members.Repo,
+	redis *redisx.Client,
 	issuer, service string,
 	ttl time.Duration,
 ) *Handler {
@@ -40,6 +43,7 @@ func NewHandler(
 		robotsSvc:   robotsSvc,
 		projectsSvc: projectsSvc,
 		membersRepo: membersRepo,
+		redis:       redis,
 		issuer:      issuer,
 		service:     service,
 		ttl:         ttl,
@@ -47,8 +51,16 @@ func NewHandler(
 }
 
 func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
+	limitKey := "ratelimit:token:" + httpx.ClientIP(r)
+	ok, err := h.redis.RateLimit(r.Context(), limitKey, 10, time.Minute)
+	if err != nil || !ok {
+		httpx.JSONError(w, httpx.TooManyRequests("too many token requests"))
+		return
+	}
+
 	username, password, ok := r.BasicAuth()
 	if !ok {
+		w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
 		httpx.JSONError(w, httpx.Unauthorized("basic auth required"))
 		return
 	}
@@ -60,6 +72,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	if auth.IsRobotUsername(username) {
 		robot, err := h.robotsSvc.Authenticate(r.Context(), username, password)
 		if err != nil {
+			w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
 			httpx.JSONError(w, httpx.Unauthorized("invalid robot credentials"))
 			return
 		}
@@ -68,6 +81,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	} else {
 		u, err := h.usersSvc.Authenticate(r.Context(), username, password)
 		if err != nil {
+			w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
 			httpx.JSONError(w, httpx.Unauthorized("invalid credentials"))
 			return
 		}
@@ -83,6 +97,15 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	var access []AccessEntry
 
+	// Fetch user role once to avoid N+1 queries per scope
+	var userRole string
+	if !isRobot {
+		u, err := h.usersSvc.GetByID(r.Context(), userID)
+		if err == nil {
+			userRole = u.Role
+		}
+	}
+
 	for _, scopeStr := range scopes {
 		parsed, err := ParseScope(scopeStr)
 		if err != nil {
@@ -90,12 +113,13 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		}
 		var allowed []string
 		if isRobot {
-			robot, _ := h.robotsSvc.GetByUsername(r.Context(), subject)
-			if robot != nil {
-				allowed = h.robotsSvc.ResolveProjectScope(robot, parsed.Type, parsed.Name, parsed.Actions)
+			robot, err := h.robotsSvc.GetByUsername(r.Context(), subject)
+			if err != nil {
+				continue
 			}
+			allowed = h.robotsSvc.ResolveProjectScope(robot, parsed.Type, parsed.Name, parsed.Actions)
 		} else {
-			allowed = h.resolveUserScope(r.Context(), userID, parsed.Type, parsed.Name, parsed.Actions)
+			allowed = h.resolveUserScope(r.Context(), userID, userRole, parsed.Type, parsed.Name, parsed.Actions)
 		}
 		access = append(access, AccessEntry{
 			Type:    parsed.Type,
@@ -118,7 +142,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) resolveUserScope(ctx context.Context, userID, scopeType, name string, requested []string) []string {
+func (h *Handler) resolveUserScope(ctx context.Context, userID, userRole, scopeType, name string, requested []string) []string {
 	if scopeType != "repository" {
 		return nil
 	}
@@ -131,6 +155,11 @@ func (h *Handler) resolveUserScope(ctx context.Context, userID, scopeType, name 
 	if err != nil {
 		return nil
 	}
+
+	if userRole == "platform_admin" {
+		return requested
+	}
+
 	role, err := h.membersRepo.GetRole(ctx, p.ID, userID)
 	if err != nil {
 		return nil

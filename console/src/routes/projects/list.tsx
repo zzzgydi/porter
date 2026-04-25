@@ -14,6 +14,7 @@ export function ProjectsPage() {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [error, setError] = useState('')
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({ queryKey: ['projects'], queryFn: api.projects.list })
@@ -25,7 +26,9 @@ export function ProjectsPage() {
       setOpen(false)
       setName('')
       setDisplayName('')
+      setError('')
     },
+    onError: (err: Error) => setError(err.message),
   })
 
   return (
@@ -50,9 +53,10 @@ export function ProjectsPage() {
                 <label className="text-sm font-medium">Display Name</label>
                 <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Demo Project" />
               </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
-              <Button onClick={() => create.mutate({ name, display_name: displayName, visibility: 'private' })} disabled={!name}>
+              <Button onClick={() => create.mutate({ name, display_name: displayName, visibility: 'private' })} disabled={!name || create.isPending}>
                 Create
               </Button>
             </DialogFooter>

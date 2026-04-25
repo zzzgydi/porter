@@ -54,13 +54,13 @@ func New(deps Deps) http.Handler {
 
 	// Registry token endpoint (public, authenticated via Basic Auth)
 	registryTokenH := registrytoken.NewHandler(
-		deps.Signer, deps.UsersSvc, deps.RobotsSvc, deps.ProjectsSvc, deps.MembersSvc.Repo(),
+		deps.Signer, deps.UsersSvc, deps.RobotsSvc, deps.ProjectsSvc, deps.MembersSvc.Repo(), deps.Redis,
 		deps.Config.RegistryTokenIssuer, deps.Config.RegistryService, deps.Config.TokenTTL(),
 	)
 	r.Get("/api/registry/token", registryTokenH.Token)
 
 	// Auth
-	authH := auth.NewHandler(deps.SessionMgr, deps.UsersSvc)
+	authH := auth.NewHandler(deps.SessionMgr, deps.UsersSvc, deps.Redis, !deps.Config.DevMode)
 	r.Route("/api/auth", authH.Routes)
 	r.Get("/api/me", authH.Me)
 
@@ -69,15 +69,16 @@ func New(deps Deps) http.Handler {
 	r.Route("/api/projects", projectsH.Routes)
 
 	// Repositories under project
-	r.Get("/api/projects/{project}/repositories", repositories.NewHandler(deps.RepoSvc, deps.ProjectsSvc, deps.SessionMgr).ListByProject)
-	r.Get("/api/projects/{project}/repositories/{repo}", repositories.NewHandler(deps.RepoSvc, deps.ProjectsSvc, deps.SessionMgr).Get)
+	repoH := repositories.NewHandler(deps.RepoSvc, deps.ProjectsSvc, deps.MembersSvc, deps.SessionMgr)
+	r.Get("/api/projects/{project}/repositories", repoH.ListByProject)
+	r.Get("/api/projects/{project}/repositories/{repo}", repoH.Get)
 
 	// Tags
-	tagsH := tags.NewHandler(deps.TagSvc, deps.RepoSvc, deps.ProjectsSvc, deps.RegistryCl, deps.SessionMgr)
+	tagsH := tags.NewHandler(deps.TagSvc, deps.RepoSvc, deps.ProjectsSvc, deps.MembersSvc, deps.RegistryCl, deps.AuditSvc, deps.SessionMgr)
 	r.Route("/api/projects/{project}/repositories/{repo}/tags", tagsH.Routes)
 
 	// Robot Tokens
-	robotsH := robots.NewHandler(deps.RobotsSvc, deps.ProjectsSvc, deps.SessionMgr)
+	robotsH := robots.NewHandler(deps.RobotsSvc, deps.ProjectsSvc, deps.MembersSvc, deps.SessionMgr)
 	r.Route("/api/robot-tokens", robotsH.Routes)
 
 	// Users

@@ -3,14 +3,16 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 )
 
 type Service struct {
-	repo *Repo
+	repo   *Repo
+	logger *slog.Logger
 }
 
-func NewService(repo *Repo) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repo, logger *slog.Logger) *Service {
+	return &Service{repo: repo, logger: logger}
 }
 
 func (s *Service) Log(ctx context.Context, actorType, actorID, action, target string, metadata map[string]any, ip, userAgent string) {
@@ -27,7 +29,11 @@ func (s *Service) Log(ctx context.Context, actorType, actorID, action, target st
 		IP:        ip,
 		UserAgent: userAgent,
 	}
-	_ = s.repo.Create(ctx, l)
+	if err := s.repo.Create(ctx, l); err != nil {
+		if s.logger != nil {
+			s.logger.Warn("audit log creation failed", "action", action, "target", target, "error", err)
+		}
+	}
 }
 
 func (s *Service) LogEvent(ctx context.Context, action, target string, metadata map[string]any) {

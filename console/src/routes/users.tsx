@@ -15,6 +15,7 @@ export function UsersPage() {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('user')
+  const [error, setError] = useState('')
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: api.users.list })
@@ -28,12 +29,15 @@ export function UsersPage() {
       setName('')
       setPassword('')
       setRole('user')
+      setError('')
     },
+    onError: (err: Error) => setError(err.message),
   })
 
   const del = useMutation({
     mutationFn: (id: string) => api.users.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err: Error) => setError(err.message),
   })
 
   return (
@@ -82,9 +86,10 @@ export function UsersPage() {
                 <option value="platform_admin">Admin</option>
               </select>
             </div>
+            {error && open && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button onClick={() => create.mutate()} disabled={!email || !password}>Create</Button>
+            <Button onClick={() => create.mutate()} disabled={!email || !password || create.isPending}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

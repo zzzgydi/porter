@@ -30,11 +30,11 @@ storage:
 redis:
   addrs:
     - redis:6379
-  password: change_me_redis_password
+  password: ${REDIS_PASSWORD}
   db: 0
-  dialtimeout: 10ms
-  readtimeout: 10ms
-  writetimeout: 10ms
+  dialtimeout: 500ms
+  readtimeout: 500ms
+  writetimeout: 500ms
   poolsize: 64
 
 auth:
@@ -43,6 +43,7 @@ auth:
     service: localhost:5080
     issuer: private-registry-auth
     rootcertbundle: /certs/auth.crt
+    jwks: /certs/jwks.json
     signingalgorithms:
       - RS256
 
@@ -55,7 +56,7 @@ notifications:
       url: http://registry-api:3000/internal/registry/events
       headers:
         Authorization:
-          - Bearer change_me_registry_webhook_secret
+          - Bearer ${WEBHOOK_SECRET}
       timeout: 3s
       threshold: 10
       backoff: 5s

@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -66,7 +67,7 @@ func NewEventHandler(redis *redisx.Client, repoSvc *repositories.Service, manife
 func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	expected := "Bearer " + h.webhookSecret
-	if authHeader != expected {
+	if subtle.ConstantTimeCompare([]byte(authHeader), []byte(expected)) != 1 {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -89,8 +90,10 @@ func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandler) handleEvent(ctx context.Context, ev Event) error {
 	// Deduplicate via Redis
 	ok, err := h.redis.MarkWebhookEvent(ctx, ev.ID, 24*time.Hour)
-	if err != nil || !ok {
-		return nil // duplicate or error
+	if err != nil {
+		h.logger.Warn("redis dedup failed, processing without dedup", "event_id", ev.ID, "error", err)
+	} else if !ok {
+		return nil // duplicate
 	}
 
 	parts := strings.SplitN(ev.Target.Repository, "/", 2)
@@ -108,7 +111,7 @@ func (h *EventHandler) handleEvent(ctx context.Context, ev Event) error {
 	switch ev.Action {
 	case "push":
 		// Upsert manifest first (tags FK references manifests)
-		if err := h.manifestSvc.Upsert(ctx, repo.ID, ev.Target.Digest, ev.Target.MediaType, ev.Target.Size, nil); err != nil {
+		if err := h.manifestSvc.Upsert(ctx, ev.Target.Digest, ev.Target.MediaType, ev.Target.Size, nil); err != nil {
 			return fmt.Errorf("upsert manifest: %w", err)
 		}
 		if ev.Target.Tag != "" {
@@ -124,11 +127,19 @@ func (h *EventHandler) handleEvent(ctx context.Context, ev Event) error {
 
 	case "delete":
 		if ev.Target.Tag != "" {
-			_ = h.tagSvc.MarkDeleted(ctx, repo.ID, ev.Target.Tag)
+			if err := h.tagSvc.MarkDeleted(ctx, repo.ID, ev.Target.Tag); err != nil {
+				return fmt.Errorf("mark tag deleted: %w", err)
+			}
 		} else {
-			_ = h.tagSvc.MarkDeletedByDigest(ctx, repo.ID, ev.Target.Digest)
+			if err := h.tagSvc.MarkDeletedByDigest(ctx, repo.ID, ev.Target.Digest); err != nil {
+				return fmt.Errorf("mark tag deleted by digest: %w", err)
+			}
 		}
-		h.auditSvc.LogEvent(ctx, "registry.delete", ev.Target.Repository, map[string]any{
+		target := ev.Target.Repository
+		if ev.Target.Tag != "" {
+			target = target + ":" + ev.Target.Tag
+		}
+		h.auditSvc.LogEvent(ctx, "registry.delete", target, map[string]any{
 			"digest": ev.Target.Digest,
 		})
 	}

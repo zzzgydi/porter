@@ -12,6 +12,18 @@ import (
 	"os"
 )
 
+func deriveKidFromPub(pub *rsa.PublicKey) string {
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes())
+	n := base64.RawURLEncoding.EncodeToString(pub.N.Bytes())
+	jwkJSON, _ := json.Marshal(map[string]string{
+		"e":   e,
+		"kty": "RSA",
+		"n":   n,
+	})
+	hash := sha256.Sum256(jwkJSON)
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+
 type JWK struct {
 	Kty string `json:"kty"`
 	Kid string `json:"kid"`
@@ -77,6 +89,9 @@ func GenerateJWKSFromCert(certPath, outPath string) error {
 }
 
 func deriveKidFromCert(cert *x509.Certificate) string {
-	sum := sha256.Sum256(cert.Raw)
-	return base64.RawURLEncoding.EncodeToString(sum[:16])
+	pub, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return ""
+	}
+	return deriveKidFromPub(pub)
 }

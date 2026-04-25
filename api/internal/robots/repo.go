@@ -95,6 +95,18 @@ func (r *Repo) ListAll(ctx context.Context) ([]RobotToken, error) {
 	return out, rows.Err()
 }
 
+func (r *Repo) GetByID(ctx context.Context, id string) (*RobotToken, error) {
+	var t RobotToken
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, name, username, token_hash, project_id, permissions, expires_at, created_at, revoked_at
+		FROM robot_tokens WHERE id = $1
+	`, id).Scan(&t.ID, &t.Name, &t.Username, &t.TokenHash, &t.ProjectID, &t.Permissions, &t.ExpiresAt, &t.CreatedAt, &t.RevokedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 func (r *Repo) Revoke(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE robot_tokens SET revoked_at = now() WHERE id = $1

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
 import {
   LayoutDashboard,
   FolderKanban,
@@ -14,13 +15,18 @@ const nav = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'Robot Tokens', href: '/robot-tokens', icon: KeyRound },
-  { name: 'Users', href: '/users', icon: Users },
-  { name: 'Audit Logs', href: '/audit-logs', icon: ClipboardList },
+  { name: 'Users', href: '/users', icon: Users, adminOnly: true },
+  { name: 'Audit Logs', href: '/audit-logs', icon: ClipboardList, adminOnly: true },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
 export function Sidebar() {
   const location = useLocation()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'platform_admin'
+
+  const visibleNav = nav.filter((item) => !item.adminOnly || isAdmin)
+
   return (
     <aside className="flex w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center gap-2 border-b px-6">
@@ -28,7 +34,7 @@ export function Sidebar() {
         <span className="text-lg font-bold">Porter</span>
       </div>
       <nav className="flex-1 space-y-1 p-4">
-        {nav.map((item) => {
+        {visibleNav.map((item) => {
           const active = location.pathname.startsWith(item.href)
           return (
             <Link

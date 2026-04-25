@@ -58,6 +58,10 @@ func (s *Service) List(ctx context.Context) ([]User, error) {
 	return s.repo.List(ctx)
 }
 
+func (s *Service) Count(ctx context.Context) (int64, error) {
+	return s.repo.Count(ctx)
+}
+
 func (s *Service) Update(ctx context.Context, id, name, role string) error {
 	u, err := s.repo.GetByID(ctx, id)
 	if err != nil {

@@ -13,12 +13,12 @@ func EnsureAdmin(ctx context.Context, usersSvc *users.Service, email, password s
 		return
 	}
 
-	list, err := usersSvc.List(ctx)
+	count, err := usersSvc.Count(ctx)
 	if err != nil {
-		logger.Error("bootstrap admin: failed to list users", "error", err)
+		logger.Error("bootstrap admin: failed to count users", "error", err)
 		return
 	}
-	if len(list) > 0 {
+	if count > 0 {
 		return
 	}
 

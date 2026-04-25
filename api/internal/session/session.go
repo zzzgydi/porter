@@ -72,14 +72,18 @@ func (sm *Manager) sign(msg string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func (sm *Manager) Cookie(token string) *http.Cookie {
+func (sm *Manager) Cookie(token string, secure bool) *http.Cookie {
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteStrictMode
+	}
 	return &http.Cookie{
 		Name:     "session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		SameSite: sameSite,
 		MaxAge:   86400 * 7,
 	}
 }

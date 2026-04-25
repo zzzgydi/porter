@@ -23,8 +23,13 @@ func (h *Handler) Routes(r chi.Router) {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	if _, err := session.FromRequest(h.sessionMgr, r); err != nil {
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
 		httpx.JSONError(w, httpx.Unauthorized("session required"))
+		return
+	}
+	if claims.Role != "platform_admin" {
+		httpx.JSONError(w, httpx.Forbidden("admin required"))
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

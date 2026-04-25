@@ -19,7 +19,6 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
     ...opts,
   })
   if (res.status === 401) {
-    window.location.href = '/login'
     throw new APIError(401, { message: 'Unauthorized' })
   }
   if (!res.ok) {

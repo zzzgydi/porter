@@ -13,24 +13,34 @@ export function ProjectMembersPage() {
   const { project } = useParams<{ project: string }>()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('developer')
+  const [error, setError] = useState('')
   const qc = useQueryClient()
 
-  const { data, isLoading } = useQuery({ queryKey: ['members', project], queryFn: () => api.projects.members.list(project!) })
+  if (!project) {
+    return <div className="p-6 text-destructive">Project not found</div>
+  }
+
+  const { data, isLoading } = useQuery({ queryKey: ['members', project], queryFn: () => api.projects.members.list(project) })
   const add = useMutation({
-    mutationFn: () => api.projects.members.add(project!, { email, role }),
+    mutationFn: () => api.projects.members.add(project, { email, role }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['members', project] })
       setEmail('')
+      setError('')
     },
+    onError: (err: Error) => setError(err.message),
   })
   const remove = useMutation({
-    mutationFn: (userId: string) => api.projects.members.remove(project!, userId),
+    mutationFn: (userId: string) => api.projects.members.remove(project, userId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['members', project] }),
+    onError: (err: Error) => setError(err.message),
   })
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="h-6 w-6" />Project Members</h1>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Card>
         <CardHeader><CardTitle>Add Member</CardTitle></CardHeader>
@@ -41,7 +51,7 @@ export function ProjectMembersPage() {
             <option value="guest">Guest</option>
             <option value="owner">Owner</option>
           </select>
-          <Button onClick={() => add.mutate()} disabled={!email}>Add</Button>
+          <Button onClick={() => add.mutate()} disabled={!email || add.isPending}>Add</Button>
         </CardContent>
       </Card>
 

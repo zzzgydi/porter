@@ -50,7 +50,7 @@ func (r *Repo) Get(ctx context.Context, repoID, name string) (*Tag, error) {
 	var t Tag
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, repository_id, name, digest, media_type, size_bytes, pushed_by, pushed_at, updated_at, deleted_at
-		FROM tags WHERE repository_id = $1 AND name = $2
+		FROM tags WHERE repository_id = $1 AND name = $2 AND deleted_at IS NULL
 	`, repoID, name).Scan(
 		&t.ID, &t.RepositoryID, &t.Name, &t.Digest, &t.MediaType, &t.SizeBytes, &t.PushedBy, &t.PushedAt, &t.UpdatedAt, &t.DeletedAt)
 	if err != nil {
