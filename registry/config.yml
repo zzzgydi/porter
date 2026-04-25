@@ -1,0 +1,74 @@
+version: 0.1
+
+log:
+  level: info
+
+http:
+  addr: :5000
+  headers:
+    X-Content-Type-Options: [nosniff]
+
+storage:
+  s3:
+    accesskey: CHANGE_ME_R2_ACCESS_KEY_ID
+    secretkey: CHANGE_ME_R2_SECRET_ACCESS_KEY
+    region: auto
+    regionendpoint: https://CHANGE_ME_R2_ACCOUNT_ID.r2.cloudflarestorage.com
+    forcepathstyle: true
+    bucket: CHANGE_ME_R2_BUCKET_NAME
+    secure: true
+    v4auth: true
+    chunksize: 5242880
+    rootdirectory: /docker-registry
+
+  delete:
+    enabled: true
+
+  cache:
+    blobdescriptor: redis
+
+  maintenance:
+    uploadpurging:
+      enabled: true
+      age: 168h
+      interval: 24h
+      dryrun: false
+    readonly:
+      enabled: false
+
+redis:
+  addrs:
+    - redis:6379
+  password: CHANGE_ME_REDIS_PASSWORD
+  db: 0
+  dialtimeout: 10ms
+  readtimeout: 10ms
+  writetimeout: 10ms
+  poolsize: 64
+
+auth:
+  token:
+    realm: https://console.registry.example.com/api/registry/token
+    service: registry.example.com
+    issuer: private-registry-auth
+    rootcertbundle: /certs/auth.crt
+    signingalgorithms:
+      - RS256
+
+notifications:
+  events:
+    includereferences: true
+  endpoints:
+    - name: console-api
+      disabled: false
+      url: http://registry-api:3000/internal/registry/events
+      headers:
+        Authorization:
+          - Bearer CHANGE_ME_WEBHOOK_SECRET
+      timeout: 3s
+      threshold: 10
+      backoff: 5s
+      ignore:
+        actions:
+          - pull
+          - mount

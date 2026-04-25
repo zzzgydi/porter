@@ -1,0 +1,65 @@
+version: 0.1
+
+log:
+  level: debug
+
+http:
+  addr: :5000
+  headers:
+    X-Content-Type-Options: [nosniff]
+
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+
+  delete:
+    enabled: true
+
+  cache:
+    blobdescriptor: redis
+
+  maintenance:
+    uploadpurging:
+      enabled: true
+      age: 168h
+      interval: 24h
+      dryrun: false
+    readonly:
+      enabled: false
+
+redis:
+  addrs:
+    - redis:6379
+  password: change_me_redis_password
+  db: 0
+  dialtimeout: 10ms
+  readtimeout: 10ms
+  writetimeout: 10ms
+  poolsize: 64
+
+auth:
+  token:
+    realm: http://localhost:5080/api/registry/token
+    service: localhost:5080
+    issuer: private-registry-auth
+    rootcertbundle: /certs/auth.crt
+    signingalgorithms:
+      - RS256
+
+notifications:
+  events:
+    includereferences: true
+  endpoints:
+    - name: console-api
+      disabled: false
+      url: http://registry-api:3000/internal/registry/events
+      headers:
+        Authorization:
+          - Bearer change_me_registry_webhook_secret
+      timeout: 3s
+      threshold: 10
+      backoff: 5s
+      ignore:
+        actions:
+          - pull
+          - mount

@@ -1,0 +1,103 @@
+services:
+  nginx:
+    image: nginx:1.27
+    container_name: registry-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d/prod:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - registry
+      - api
+      - console
+
+  registry:
+    image: registry:3.1.0
+    container_name: registry-core
+    restart: unless-stopped
+    environment:
+      REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:-change_me_registry_http_secret}
+    volumes:
+      - ./registry/config.yml:/etc/distribution/config.yml:ro
+      - ./registry/certs:/certs:ro
+    depends_on:
+      - redis
+
+  postgres:
+    image: postgres:16
+    container_name: registry-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: registry-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ./api
+    container_name: registry-api
+    restart: unless-stopped
+    environment:
+      API_PORT: ${API_PORT}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REGISTRY_INTERNAL_URL: http://registry:5000
+      REGISTRY_PUBLIC_URL: https://${REGISTRY_DOMAIN}
+      REGISTRY_SERVICE: ${REGISTRY_SERVICE}
+      REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER}
+      REGISTRY_TOKEN_REALM: ${REGISTRY_TOKEN_REALM}
+      REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/secrets/auth.key
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      API_JWT_SECRET: ${API_JWT_SECRET}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+    volumes:
+      - ./registry/certs/auth.key:/run/secrets/auth.key:ro
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      registry:
+        condition: service_started
+
+  console:
+    build:
+      context: ./console
+    container_name: registry-console
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: https://${CONSOLE_DOMAIN}/api
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:

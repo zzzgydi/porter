@@ -1,0 +1,159 @@
+package registrytoken
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/porter/api/internal/auth"
+	"github.com/porter/api/internal/httpx"
+	"github.com/porter/api/internal/members"
+	"github.com/porter/api/internal/projects"
+	"github.com/porter/api/internal/robots"
+	"github.com/porter/api/internal/users"
+)
+
+type Handler struct {
+	signer      *Signer
+	usersSvc    *users.Service
+	robotsSvc   *robots.Service
+	projectsSvc *projects.Service
+	membersRepo *members.Repo
+	issuer      string
+	service     string
+	ttl         time.Duration
+}
+
+func NewHandler(
+	signer *Signer,
+	usersSvc *users.Service,
+	robotsSvc *robots.Service,
+	projectsSvc *projects.Service,
+	membersRepo *members.Repo,
+	issuer, service string,
+	ttl time.Duration,
+) *Handler {
+	return &Handler{
+		signer:      signer,
+		usersSvc:    usersSvc,
+		robotsSvc:   robotsSvc,
+		projectsSvc: projectsSvc,
+		membersRepo: membersRepo,
+		issuer:      issuer,
+		service:     service,
+		ttl:         ttl,
+	}
+}
+
+func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		httpx.JSONError(w, httpx.Unauthorized("basic auth required"))
+		return
+	}
+
+	var subject string
+	var userID string
+	var isRobot bool
+
+	if auth.IsRobotUsername(username) {
+		robot, err := h.robotsSvc.Authenticate(r.Context(), username, password)
+		if err != nil {
+			httpx.JSONError(w, httpx.Unauthorized("invalid robot credentials"))
+			return
+		}
+		subject = robot.Username
+		isRobot = true
+	} else {
+		u, err := h.usersSvc.Authenticate(r.Context(), username, password)
+		if err != nil {
+			httpx.JSONError(w, httpx.Unauthorized("invalid credentials"))
+			return
+		}
+		subject = u.Email
+		userID = u.ID
+	}
+
+	service := r.URL.Query().Get("service")
+	if service == "" {
+		service = h.service
+	}
+	scopes := r.URL.Query()["scope"]
+
+	var access []AccessEntry
+
+	for _, scopeStr := range scopes {
+		parsed, err := ParseScope(scopeStr)
+		if err != nil {
+			continue
+		}
+		var allowed []string
+		if isRobot {
+			robot, _ := h.robotsSvc.GetByUsername(r.Context(), subject)
+			if robot != nil {
+				allowed = h.robotsSvc.ResolveProjectScope(robot, parsed.Type, parsed.Name, parsed.Actions)
+			}
+		} else {
+			allowed = h.resolveUserScope(r.Context(), userID, parsed.Type, parsed.Name, parsed.Actions)
+		}
+		access = append(access, AccessEntry{
+			Type:    parsed.Type,
+			Name:    parsed.Name,
+			Actions: allowed,
+		})
+	}
+
+	token, err := h.signer.Sign(subject, service, access, h.ttl)
+	if err != nil {
+		httpx.JSONError(w, httpx.Internal("token signing failed"))
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"token":        token,
+		"access_token": token,
+		"expires_in":   int(h.ttl.Seconds()),
+		"issued_at":    time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) resolveUserScope(ctx context.Context, userID, scopeType, name string, requested []string) []string {
+	if scopeType != "repository" {
+		return nil
+	}
+	parts := strings.SplitN(name, "/", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	projectName := parts[0]
+	p, err := h.projectsSvc.GetByName(ctx, projectName)
+	if err != nil {
+		return nil
+	}
+	role, err := h.membersRepo.GetRole(ctx, p.ID, userID)
+	if err != nil {
+		return nil
+	}
+
+	grantedSet := make(map[string]struct{})
+	switch role {
+	case "owner":
+		grantedSet["pull"] = struct{}{}
+		grantedSet["push"] = struct{}{}
+		grantedSet["delete"] = struct{}{}
+	case "developer":
+		grantedSet["pull"] = struct{}{}
+		grantedSet["push"] = struct{}{}
+	case "guest":
+		grantedSet["pull"] = struct{}{}
+	}
+
+	var result []string
+	for _, a := range requested {
+		if _, ok := grantedSet[a]; ok {
+			result = append(result, a)
+		}
+	}
+	return result
+}

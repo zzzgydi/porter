@@ -1,0 +1,55 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Secrets & certificates
+registry/certs/*
+!registry/certs/.gitkeep
+nginx/certs/*
+!nginx/certs/.gitkeep
+
+# Registry data
+registry/data/*
+!registry/data/.gitkeep
+
+# Docker volumes
+postgres_dev_data/
+redis_dev_data/
+
+# Go
+api/bin/
+api/vendor/
+api/*.exe
+api/*.test
+api/*.out
+go.work
+go.work.sum
+
+# Node / Vite / React
+console/node_modules/
+console/dist/
+console/dist-ssr/
+console/.cache/
+console/*.local
+console/coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.spec
+
+# OS
+Thumbs.db
