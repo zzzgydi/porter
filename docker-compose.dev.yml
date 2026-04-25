@@ -1,22 +1,10 @@
 services:
-  nginx:
-    image: nginx:1.27
-    container_name: registry-nginx
-    restart: unless-stopped
-    profiles:
-      - dev
-    ports:
-      - "5080:5080"
-      - "5081:5081"
-    volumes:
-      - ./nginx/conf.d/dev:/etc/nginx/conf.d:ro
-
   registry:
     image: registry:3.1.0
     container_name: registry-core
     restart: unless-stopped
-    profiles:
-      - dev
+    ports:
+      - "127.0.0.1:5000:5000"
     environment:
       REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:-change_me_registry_http_secret}
     volumes:
@@ -30,8 +18,6 @@ services:
     image: postgres:16
     container_name: registry-postgres
     restart: unless-stopped
-    profiles:
-      - dev
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -48,8 +34,6 @@ services:
     image: redis:7
     container_name: registry-redis
     restart: unless-stopped
-    profiles:
-      - dev
     command:
       - redis-server
       - --requirepass
@@ -73,18 +57,18 @@ services:
       context: ./api
     container_name: registry-api
     restart: unless-stopped
-    profiles:
-      - dev
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       API_PORT: ${API_PORT}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REGISTRY_INTERNAL_URL: http://registry:5000
-      REGISTRY_PUBLIC_URL: http://${DEV_REGISTRY_DOMAIN:-localhost:5080}
-      REGISTRY_SERVICE: ${DEV_REGISTRY_DOMAIN:-localhost:5080}
+      REGISTRY_PUBLIC_URL: http://localhost:5000
+      REGISTRY_SERVICE: localhost:5000
       REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER}
-      REGISTRY_TOKEN_REALM: http://${DEV_REGISTRY_DOMAIN:-localhost:5080}/api/registry/token
+      REGISTRY_TOKEN_REALM: http://localhost:3000/api/registry/token
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/secrets/auth.key
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       API_JWT_SECRET: ${API_JWT_SECRET}
@@ -108,14 +92,12 @@ services:
   console:
     build:
       context: ./console
-      args:
-        - VITE_API_BASE_URL=http://${DEV_CONSOLE_DOMAIN:-localhost:5081}/api
     container_name: registry-console
     restart: unless-stopped
-    profiles:
-      - dev
+    ports:
+      - "127.0.0.1:4173:4173"
     environment:
-      VITE_API_BASE_URL: http://${DEV_CONSOLE_DOMAIN:-localhost:5081}/api
+      VITE_API_BASE_URL: http://localhost:3000/api
     depends_on:
       - api
 

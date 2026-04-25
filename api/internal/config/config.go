@@ -32,6 +32,8 @@ type Config struct {
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
 
+	ConsoleOrigin string
+
 	DevMode bool
 }
 
@@ -49,7 +51,7 @@ func Load() (*Config, error) {
 		RedisAddr:              getenv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:          os.Getenv("REDIS_PASSWORD"),
 		RegistryInternalURL:    getenv("REGISTRY_INTERNAL_URL", "http://localhost:5000"),
-		RegistryPublicURL:      getenv("REGISTRY_PUBLIC_URL", "http://localhost:5080"),
+		RegistryPublicURL:      getenv("REGISTRY_PUBLIC_URL", "http://localhost:5000"),
 		RegistryService:        mustEnv("REGISTRY_SERVICE"),
 		RegistryTokenIssuer:    mustEnv("REGISTRY_TOKEN_ISSUER"),
 		RegistryTokenRealm:     mustEnv("REGISTRY_TOKEN_REALM"),
@@ -64,9 +66,12 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-func (c *Config) ConsoleOrigin() string {
+func (c *Config) GetConsoleOrigin() string {
+	if c.ConsoleOrigin != "" {
+		return c.ConsoleOrigin
+	}
 	if c.DevMode {
-		return "http://localhost:5081"
+		return "http://localhost:4173"
 	}
 	return c.RegistryPublicURL
 }

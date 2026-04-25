@@ -45,7 +45,7 @@ func New(deps Deps) http.Handler {
 	r.Use(httpx.RequestID)
 	r.Use(httpx.Logger(deps.Logger))
 	r.Use(httpx.Recoverer)
-	r.Use(httpx.CORS(deps.Config.ConsoleOrigin()))
+	r.Use(httpx.CORS(deps.Config.GetConsoleOrigin()))
 
 	// Public
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

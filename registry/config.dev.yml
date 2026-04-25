@@ -39,8 +39,8 @@ redis:
 
 auth:
   token:
-    realm: http://localhost:5080/api/registry/token
-    service: localhost:5080
+    realm: http://localhost:3000/api/registry/token
+    service: localhost:5000
     issuer: private-registry-auth
     rootcertbundle: /certs/auth.crt
     jwks: /certs/jwks.json

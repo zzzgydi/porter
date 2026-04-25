@@ -1,6 +1,6 @@
 # Porter - Private Docker Registry Platform
 
-A lightweight private Docker image platform built on top of CNCF Distribution (`registry:3.1.0`), Cloudflare R2 (or filesystem for dev), Go API Server, Postgres, Redis, Nginx, and a Vite React console.
+A lightweight private Docker image platform built on top of CNCF Distribution (`registry:3.1.0`), Cloudflare R2 (or filesystem for dev), Go API Server, Postgres, Redis, and a Vite React console.
 
 ## Architecture
 
@@ -9,7 +9,7 @@ Docker CLI / CI / CD
         |
         | docker login / push / pull
         v
-    Nginx (HTTPS)
+    Host Nginx (HTTPS, optional)
         |
         +-- registry.example.com  -> registry:3.1.0 (Token Auth, R2/FS storage)
         |
@@ -29,7 +29,7 @@ Docker CLI / CI / CD
 
 ```json
 {
-  "insecure-registries": ["localhost:5080"]
+  "insecure-registries": ["localhost:5000"]
 }
 ```
 
@@ -54,24 +54,25 @@ cp .env.example .env
 ### 3. Start the dev stack
 
 ```bash
-docker compose --profile dev up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
 Services will be available at:
-- Registry: `http://localhost:5080`
-- Console: `http://localhost:5081`
+- Registry: `http://localhost:5000`
+- Console: `http://localhost:4173`
+- API: `http://localhost:3000`
 
 ### 4. Verify registry challenge
 
 ```bash
-curl -I http://localhost:5080/v2/
+curl -I http://localhost:5000/v2/
 ```
 
 Expected: `401 Unauthorized` with `WWW-Authenticate: Bearer ...`
 
 ### 5. Log in to the console
 
-Open `http://localhost:5081` in your browser.
+Open `http://localhost:4173` in your browser.
 
 Default admin credentials (from `.env`):
 - Email: `admin@example.com`
@@ -90,18 +91,18 @@ Default admin credentials (from `.env`):
 
 ```bash
 # Login
-docker login localhost:5080
+docker login localhost:5000
 # Username: robot$demo-ci
 # Password: <paste token>
 
 # Push test
 docker pull alpine:latest
-docker tag alpine:latest localhost:5080/demo/alpine:latest
-docker push localhost:5080/demo/alpine:latest
+docker tag alpine:latest localhost:5000/demo/alpine:latest
+docker push localhost:5000/demo/alpine:latest
 
 # Pull test
-docker rmi localhost:5080/demo/alpine:latest
-docker pull localhost:5080/demo/alpine:latest
+docker rmi localhost:5000/demo/alpine:latest
+docker pull localhost:5000/demo/alpine:latest
 ```
 
 ### 8. Check the console
@@ -123,19 +124,15 @@ Record:
 
 ### 2. Prepare TLS certificates
 
-Use certbot or any CA:
+Use certbot or any CA on your host machine. Configure your host nginx (or another reverse proxy) to terminate TLS and proxy to the Docker services:
 
-```bash
-sudo certbot certonly --standalone \
-  -d registry.example.com \
-  -d console.registry.example.com
+```
+registry.example.com  -> 127.0.0.1:5000
+console.example.com   -> 127.0.0.1:4173
+  /api/*              -> 127.0.0.1:3000
 ```
 
-Copy to:
-```
-nginx/certs/fullchain.pem
-nginx/certs/privkey.pem
-```
+See `nginx.example.conf` for a reference nginx configuration.
 
 ### 3. Generate registry auth cert
 
@@ -150,20 +147,15 @@ cp .env.example .env
 ```
 
 Edit `.env` and replace all `change_me_*` placeholders with strong secrets.
-Set `REGISTRY_DOMAIN` and `CONSOLE_DOMAIN` to your real domains.
+Set `REGISTRY_PUBLIC_URL` and `CONSOLE_API_URL` to your real public URLs.
 
 ### 5. Update registry config
 
 Edit `registry/config.yml` (production config):
 - Replace `YOUR_R2_*` placeholders with real values.
-- Ensure `auth.token.realm` points to your public console domain.
+- Ensure `auth.token.realm` points to your public API token endpoint.
 
-### 6. Update Nginx config
-
-Edit `nginx/conf.d/registry.conf`:
-- Replace `registry.example.com` and `console.registry.example.com` with your domains.
-
-### 7. Deploy
+### 6. Deploy
 
 ```bash
 docker compose up -d --build
@@ -176,9 +168,7 @@ docker compose up -d --build
 ├── docker-compose.yml              # Production stack
 ├── docker-compose.dev.yml          # Dev override (filesystem storage, HTTP)
 ├── .env.example                    # Environment template
-├── nginx/
-│   ├── conf.d/registry.conf        # Production Nginx (HTTPS)
-│   └── conf.d/registry.dev.conf    # Dev Nginx (HTTP)
+├── nginx.example.conf              # Reference nginx config for host
 ├── registry/
 │   ├── config.yml                  # Production registry config (R2)
 │   ├── config.dev.yml              # Dev registry config (filesystem)
@@ -212,9 +202,9 @@ docker compose up -d --build
 ## Security Checklist
 
 - [ ] Replace all `change_me_*` secrets in `.env`
-- [ ] Use real TLS certificates in production
+- [ ] Use real TLS certificates in production (host nginx)
 - [ ] Restrict R2 API token to the registry bucket only
-- [ ] Do not expose Postgres/Redis ports publicly
+- [ ] Do not expose Postgres/Redis ports publicly (services bind to 127.0.0.1)
 - [ ] Rotate `auth.key` periodically (requires reconfiguring registry)
 - [ ] Enable 2FA for console users (future enhancement)
 
