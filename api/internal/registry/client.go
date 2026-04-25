@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/porter/api/internal/registrytoken"
+	"github.com/zzzgydi/porter/api/internal/registrytoken"
 )
 
 type Client struct {

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/porter/api/internal/audit"
-	"github.com/porter/api/internal/manifests"
-	"github.com/porter/api/internal/redisx"
-	"github.com/porter/api/internal/repositories"
-	"github.com/porter/api/internal/tags"
+	"github.com/zzzgydi/porter/api/internal/audit"
+	"github.com/zzzgydi/porter/api/internal/manifests"
+	"github.com/zzzgydi/porter/api/internal/redisx"
+	"github.com/zzzgydi/porter/api/internal/repositories"
+	"github.com/zzzgydi/porter/api/internal/tags"
 )
 
 type EventPayload struct {

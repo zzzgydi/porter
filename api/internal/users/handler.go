@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/mail"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/porter/api/internal/session"
-	"github.com/porter/api/internal/httpx"
+	"github.com/zzzgydi/porter/api/internal/httpx"
+	"github.com/zzzgydi/porter/api/internal/session"
 )
 
 func validateUserInput(email, password, role string) error {

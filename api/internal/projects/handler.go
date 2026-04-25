@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/porter/api/internal/authz"
-	"github.com/porter/api/internal/httpx"
-	"github.com/porter/api/internal/members"
-	"github.com/porter/api/internal/session"
+	"github.com/zzzgydi/porter/api/internal/authz"
+	"github.com/zzzgydi/porter/api/internal/httpx"
+	"github.com/zzzgydi/porter/api/internal/members"
+	"github.com/zzzgydi/porter/api/internal/session"
 )
 
 var projectNameRe = regexp.MustCompile(`^[a-z0-9_-]+$`)

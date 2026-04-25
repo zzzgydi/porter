@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/porter/api/internal/users"
+	"github.com/zzzgydi/porter/api/internal/users"
 )
 
 func EnsureAdmin(ctx context.Context, usersSvc *users.Service, email, password string, logger *slog.Logger) {

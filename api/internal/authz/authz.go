@@ -3,9 +3,9 @@ package authz
 import (
 	"net/http"
 
-	"github.com/porter/api/internal/httpx"
-	"github.com/porter/api/internal/members"
-	"github.com/porter/api/internal/session"
+	"github.com/zzzgydi/porter/api/internal/httpx"
+	"github.com/zzzgydi/porter/api/internal/members"
+	"github.com/zzzgydi/porter/api/internal/session"
 )
 
 func RequireMember(membersRepo *members.Repo, sessionMgr *session.Manager, r *http.Request, projectID string) (*session.Claims, error) {

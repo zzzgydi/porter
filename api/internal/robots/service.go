@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/porter/api/internal/auth"
-	"github.com/porter/api/internal/projects"
+	"github.com/zzzgydi/porter/api/internal/auth"
+	"github.com/zzzgydi/porter/api/internal/projects"
 )
 
 type Service struct {
