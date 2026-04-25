@@ -34,6 +34,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
 	list, err := h.service.List(r.Context(), limit, offset)
 	if err != nil {
 		httpx.JSONError(w, httpx.Internal("db error"))

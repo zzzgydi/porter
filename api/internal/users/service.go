@@ -62,6 +62,10 @@ func (s *Service) Count(ctx context.Context) (int64, error) {
 	return s.repo.Count(ctx)
 }
 
+func (s *Service) CountAdmins(ctx context.Context) (int64, error) {
+	return s.repo.CountAdmins(ctx)
+}
+
 var ValidUserRoles = map[string]bool{"user": true, "platform_admin": true}
 
 func (s *Service) Update(ctx context.Context, id, name, role string) error {

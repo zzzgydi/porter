@@ -30,6 +30,17 @@ func (s *Service) Add(ctx context.Context, projectID, email, role string) (*Memb
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
+	// Prevent downgrading the last owner
+	existingRole, _ := s.repo.GetRole(ctx, projectID, u.ID)
+	if existingRole == "owner" && role != "owner" {
+		owners, err := s.repo.CountOwners(ctx, projectID)
+		if err != nil {
+			return nil, fmt.Errorf("count owners: %w", err)
+		}
+		if owners <= 1 {
+			return nil, fmt.Errorf("cannot downgrade the last owner")
+		}
+	}
 	if err := s.repo.Add(ctx, projectID, u.ID, role); err != nil {
 		return nil, fmt.Errorf("add member: %w", err)
 	}

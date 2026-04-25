@@ -128,11 +128,37 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireAdmin(r); err != nil {
-		httpx.JSONError(w, err)
+	claims, err := session.FromRequest(h.sessionMgr, r)
+	if err != nil {
+		httpx.JSONError(w, httpx.Unauthorized("session required"))
+		return
+	}
+	if claims.Role != "platform_admin" {
+		httpx.JSONError(w, httpx.Forbidden("admin required"))
 		return
 	}
 	id := chi.URLParam(r, "id")
+	// Prevent self-deletion if you're the last admin
+	if claims.UserID == id {
+		count, err := h.service.Count(r.Context())
+		if err != nil {
+			httpx.JSONError(w, httpx.Internal("db error"))
+			return
+		}
+		if count <= 1 {
+			httpx.JSONError(w, httpx.BadRequest("cannot delete the only user"))
+			return
+		}
+		adminCount, err := h.service.CountAdmins(r.Context())
+		if err != nil {
+			httpx.JSONError(w, httpx.Internal("db error"))
+			return
+		}
+		if adminCount <= 1 {
+			httpx.JSONError(w, httpx.BadRequest("cannot delete the last admin"))
+			return
+		}
+	}
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		httpx.JSONError(w, httpx.Internal("delete failed"))
 		return

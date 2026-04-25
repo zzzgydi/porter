@@ -120,7 +120,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.service.Create(r.Context(), req.Name, req.DisplayName, req.Visibility, claims.UserID)
 	if err != nil {
-		httpx.JSONError(w, httpx.BadRequest(err.Error()))
+		httpx.JSONError(w, httpx.BadRequest("project already exists or invalid data"))
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, p)

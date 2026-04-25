@@ -85,6 +85,12 @@ func (r *Repo) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
+func (r *Repo) CountAdmins(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = 'platform_admin'`).Scan(&n)
+	return n, err
+}
+
 func (r *Repo) Update(ctx context.Context, u *User) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE users SET name = $1, role = $2, updated_at = now()
