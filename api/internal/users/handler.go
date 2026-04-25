@@ -11,8 +11,6 @@ import (
 	"github.com/porter/api/internal/httpx"
 )
 
-var validUserRoles = map[string]bool{"user": true, "platform_admin": true}
-
 func validateUserInput(email, password, role string) error {
 	if _, err := mail.ParseAddress(email); err != nil {
 		return httpx.BadRequest("invalid email")
@@ -20,7 +18,7 @@ func validateUserInput(email, password, role string) error {
 	if len(password) < 8 {
 		return httpx.BadRequest("password must be at least 8 characters")
 	}
-	if role != "" && !validUserRoles[role] {
+	if role != "" && !ValidUserRoles[role] {
 		return httpx.BadRequest("invalid role")
 	}
 	return nil

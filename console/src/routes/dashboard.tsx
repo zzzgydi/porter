@@ -21,6 +21,7 @@ export function DashboardPage() {
   const { data: robots, isLoading: rLoading } = useQuery({
     queryKey: ['robots'],
     queryFn: () => api.robots.list(),
+    enabled: isAdmin,
   })
 
   const stats = [

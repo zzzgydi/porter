@@ -68,8 +68,12 @@ export const api = {
   },
 
   robots: {
-    list: (project?: string) =>
-      request<RobotToken[]>(`/api/robot-tokens${project ? `?project=${project}` : ''}`),
+    list: (project?: string) => {
+      const qs = new URLSearchParams()
+      if (project) qs.set('project', project)
+      const query = qs.toString()
+      return request<RobotToken[]>(`/api/robot-tokens${query ? '?' + query : ''}`)
+    },
     create: (data: { project_id: string; name: string; permissions: Record<string, string[]> }) =>
       request<RobotToken>('/api/robot-tokens', { method: 'POST', body: JSON.stringify(data) }),
     revoke: (id: string) => request<{ ok: boolean }>(`/api/robot-tokens/${id}`, { method: 'DELETE' }),

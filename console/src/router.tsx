@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { useAuth } from './lib/auth'
 import { App } from './app'
 import { LoginPage } from './routes/login'
 import { DashboardPage } from './routes/dashboard'
@@ -10,6 +11,14 @@ import { RobotTokensPage } from './routes/robot-tokens'
 import { UsersPage } from './routes/users'
 import { AuditLogsPage } from './routes/audit-logs'
 import { SettingsPage } from './routes/settings'
+
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  if (user?.role !== 'platform_admin') {
+    return <Navigate to="/dashboard" replace />
+  }
+  return children
+}
 
 export const router = createBrowserRouter([
   {
@@ -27,8 +36,22 @@ export const router = createBrowserRouter([
       { path: 'projects/:project/members', element: <ProjectMembersPage /> },
       { path: 'projects/:project/repositories/:repo', element: <RepositoryDetailPage /> },
       { path: 'robot-tokens', element: <RobotTokensPage /> },
-      { path: 'users', element: <UsersPage /> },
-      { path: 'audit-logs', element: <AuditLogsPage /> },
+      {
+        path: 'users',
+        element: (
+          <RequireAdmin>
+            <UsersPage />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: 'audit-logs',
+        element: (
+          <RequireAdmin>
+            <AuditLogsPage />
+          </RequireAdmin>
+        ),
+      },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

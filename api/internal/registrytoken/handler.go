@@ -106,6 +106,16 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch robot once if needed to avoid N+1 queries per scope
+	var robot *robots.RobotToken
+	if isRobot {
+		var err error
+		robot, err = h.robotsSvc.GetByUsername(r.Context(), subject)
+		if err != nil {
+			robot = nil
+		}
+	}
+
 	for _, scopeStr := range scopes {
 		parsed, err := ParseScope(scopeStr)
 		if err != nil {
@@ -113,8 +123,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		}
 		var allowed []string
 		if isRobot {
-			robot, err := h.robotsSvc.GetByUsername(r.Context(), subject)
-			if err != nil {
+			if robot == nil {
 				continue
 			}
 			allowed = h.robotsSvc.ResolveProjectScope(robot, parsed.Type, parsed.Name, parsed.Actions)

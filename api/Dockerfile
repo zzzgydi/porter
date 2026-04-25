@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -ldflags='-s -w' -o /registry-api ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -ldflags='-s -w' -o /registry-api ./cmd/server
 
 FROM alpine:3.20
 

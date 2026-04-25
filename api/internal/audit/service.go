@@ -4,15 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 )
 
 type Service struct {
 	repo   *Repo
 	logger *slog.Logger
+	queue  chan *Log
 }
 
 func NewService(repo *Repo, logger *slog.Logger) *Service {
-	return &Service{repo: repo, logger: logger}
+	s := &Service{
+		repo:   repo,
+		logger: logger,
+		queue:  make(chan *Log, 1000),
+	}
+	go s.worker()
+	return s
+}
+
+func (s *Service) worker() {
+	for l := range s.queue {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := s.repo.Create(ctx, l); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("audit log creation failed", "action", l.Action, "target", l.Target, "error", err)
+			}
+		}
+		cancel()
+	}
 }
 
 func (s *Service) Log(ctx context.Context, actorType, actorID, action, target string, metadata map[string]any, ip, userAgent string) {
@@ -29,9 +49,11 @@ func (s *Service) Log(ctx context.Context, actorType, actorID, action, target st
 		IP:        ip,
 		UserAgent: userAgent,
 	}
-	if err := s.repo.Create(ctx, l); err != nil {
+	select {
+	case s.queue <- l:
+	default:
 		if s.logger != nil {
-			s.logger.Warn("audit log creation failed", "action", action, "target", target, "error", err)
+			s.logger.Warn("audit log queue full, dropped", "action", action, "target", target)
 		}
 	}
 }

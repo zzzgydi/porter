@@ -73,12 +73,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.JSONError(w, httpx.Unauthorized("invalid credentials"))
 		return
 	}
-	token, err := h.sessionMgr.Issue(u.ID, u.Email, u.Role, 7*24*time.Hour)
+	ttl := 7 * 24 * time.Hour
+	token, err := h.sessionMgr.Issue(u.ID, u.Email, u.Role, ttl)
 	if err != nil {
 		httpx.JSONError(w, httpx.Internal("session error"))
 		return
 	}
-	http.SetCookie(w, h.sessionMgr.Cookie(token, h.secure))
+	http.SetCookie(w, h.sessionMgr.Cookie(token, h.secure, ttl))
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"id":    u.ID,
 		"email": u.Email,

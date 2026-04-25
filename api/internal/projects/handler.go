@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/porter/api/internal/session"
+	"github.com/porter/api/internal/authz"
 	"github.com/porter/api/internal/httpx"
 	"github.com/porter/api/internal/members"
+	"github.com/porter/api/internal/session"
 )
 
 var projectNameRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
@@ -47,33 +48,11 @@ func (h *Handler) requireSession(r *http.Request) (*session.Claims, error) {
 }
 
 func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := h.requireSession(r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	_, err = h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	return claims, nil
+	return authz.RequireMember(h.membersSvc.Repo(), h.sessionMgr, r, projectID)
 }
 
 func (h *Handler) requireProjectOwner(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := h.requireSession(r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil || role != "owner" {
-		return nil, httpx.Forbidden("owner required")
-	}
-	return claims, nil
+	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "owner")
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -164,6 +143,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.JSONError(w, httpx.BadRequest("invalid body"))
+		return
+	}
+	if req.Visibility != "" && req.Visibility != "private" && req.Visibility != "public" {
+		httpx.JSONError(w, httpx.BadRequest("visibility must be private or public"))
 		return
 	}
 	if err := h.service.Update(r.Context(), p.ID, req.DisplayName, req.Visibility); err != nil {

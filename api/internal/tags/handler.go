@@ -6,11 +6,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/porter/api/internal/audit"
-	"github.com/porter/api/internal/session"
+	"github.com/porter/api/internal/authz"
 	"github.com/porter/api/internal/httpx"
 	"github.com/porter/api/internal/members"
 	"github.com/porter/api/internal/projects"
 	"github.com/porter/api/internal/repositories"
+	"github.com/porter/api/internal/session"
 )
 
 type registryClient interface {
@@ -54,54 +55,15 @@ func (h *Handler) Routes(r chi.Router) {
 }
 
 func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := session.FromRequest(h.sessionMgr, r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	_, err = h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	return claims, nil
+	return authz.RequireMember(h.membersSvc.Repo(), h.sessionMgr, r, projectID)
 }
 
 func (h *Handler) requireProjectDeveloper(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := session.FromRequest(h.sessionMgr, r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	if role != "developer" && role != "owner" {
-		return nil, httpx.Forbidden("developer or owner required")
-	}
-	return claims, nil
+	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "developer", "owner")
 }
 
 func (h *Handler) requireProjectOwner(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := session.FromRequest(h.sessionMgr, r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	if role != "owner" {
-		return nil, httpx.Forbidden("owner required")
-	}
-	return claims, nil
+	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "owner")
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -186,13 +148,15 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.MarkDeleted(r.Context(), repo.ID, tagName); err != nil {
-		httpx.JSONError(w, httpx.Internal("db error"))
+	// Delete from registry first; if it fails the DB record stays intact
+	// so the user can retry.
+	if err := h.registry.DeleteManifest(r.Context(), fullName, tag.Digest); err != nil {
+		httpx.JSONError(w, httpx.Internal("registry delete failed"))
 		return
 	}
 
-	if err := h.registry.DeleteManifest(r.Context(), fullName, tag.Digest); err != nil {
-		httpx.JSONError(w, httpx.Internal("registry delete failed: "+err.Error()))
+	if err := h.service.MarkDeleted(r.Context(), repo.ID, tagName); err != nil {
+		httpx.JSONError(w, httpx.Internal("db error"))
 		return
 	}
 

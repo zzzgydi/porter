@@ -2,7 +2,10 @@ package members
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/porter/api/internal/db"
 )
@@ -71,9 +74,23 @@ func (r *Repo) GetRole(ctx context.Context, projectID, userID string) (string, e
 		SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2
 	`, projectID, userID).Scan(&role)
 	if err != nil {
-		return "", err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("not a member")
+		}
+		return "", fmt.Errorf("db error: %w", err)
 	}
 	return role, nil
+}
+
+func (r *Repo) CountOwners(ctx context.Context, projectID string) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM project_members WHERE project_id = $1 AND role = 'owner'
+	`, projectID).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 func (r *Repo) IsOwner(ctx context.Context, projectID, userID string) (bool, error) {

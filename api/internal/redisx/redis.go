@@ -30,22 +30,31 @@ func (c *Client) Ping(ctx context.Context) error {
 }
 
 func (c *Client) RateLimit(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
-	pipe := c.Pipeline()
 	now := time.Now().Unix()
 	windowStart := now - int64(window.Seconds())
 
-	pipe.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", windowStart))
-	pipe.ZCard(ctx, key)
-	pipe.ZAdd(ctx, key, redis.Z{Score: float64(now), Member: fmt.Sprintf("%d:%s", now, uuid.New().String())})
-	pipe.Expire(ctx, key, window)
-
-	cmds, err := pipe.Exec(ctx)
+	_, err := c.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", windowStart)).Result()
 	if err != nil {
 		return false, err
 	}
 
-	count := cmds[1].(*redis.IntCmd).Val()
-	return count < int64(limit), nil
+	count, err := c.ZCard(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+
+	if count >= int64(limit) {
+		return false, nil
+	}
+
+	pipe := c.Pipeline()
+	pipe.ZAdd(ctx, key, redis.Z{Score: float64(now), Member: fmt.Sprintf("%d:%s", now, uuid.New().String())})
+	pipe.Expire(ctx, key, window)
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (c *Client) MarkWebhookEvent(ctx context.Context, eventID string, ttl time.Duration) (bool, error) {

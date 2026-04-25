@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -11,21 +12,37 @@ import (
 )
 
 func ClientIP(r *http.Request) string {
-	ip := r.Header.Get("X-Real-IP")
-	if ip == "" {
-		ip = r.Header.Get("X-Forwarded-For")
-		if ip != "" {
-			// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2
-			// Take the first one (the actual client)
-			if idx := strings.Index(ip, ","); idx != -1 {
-				ip = strings.TrimSpace(ip[:idx])
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+
+	if isTrustedProxy(ip) {
+		realIP := r.Header.Get("X-Real-IP")
+		if realIP != "" {
+			ip = realIP
+		} else {
+			forwarded := r.Header.Get("X-Forwarded-For")
+			if forwarded != "" {
+				// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2
+				// Take the first one (the actual client)
+				if idx := strings.Index(forwarded, ","); idx != -1 {
+					ip = strings.TrimSpace(forwarded[:idx])
+				} else {
+					ip = strings.TrimSpace(forwarded)
+				}
 			}
 		}
 	}
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
 	return ip
+}
+
+func isTrustedProxy(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	return parsed.IsLoopback() || parsed.IsPrivate()
 }
 
 func RequestID(next http.Handler) http.Handler {

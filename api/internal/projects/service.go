@@ -62,7 +62,9 @@ func (s *Service) Update(ctx context.Context, id, displayName, visibility string
 		return err
 	}
 	p.DisplayName = displayName
-	p.Visibility = visibility
+	if visibility != "" {
+		p.Visibility = visibility
+	}
 	return s.repo.Update(ctx, p)
 }
 

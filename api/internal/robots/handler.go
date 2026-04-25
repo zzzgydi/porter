@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/porter/api/internal/session"
+	"github.com/porter/api/internal/authz"
 	"github.com/porter/api/internal/httpx"
 	"github.com/porter/api/internal/members"
 	"github.com/porter/api/internal/projects"
+	"github.com/porter/api/internal/session"
 )
 
 type Handler struct {
@@ -29,54 +30,15 @@ func (h *Handler) Routes(r chi.Router) {
 }
 
 func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := session.FromRequest(h.sessionMgr, r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	_, err = h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	return claims, nil
+	return authz.RequireMember(h.membersSvc.Repo(), h.sessionMgr, r, projectID)
 }
 
 func (h *Handler) requireProjectDeveloper(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := session.FromRequest(h.sessionMgr, r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	if role != "developer" && role != "owner" {
-		return nil, httpx.Forbidden("developer or owner required")
-	}
-	return claims, nil
+	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "developer", "owner")
 }
 
 func (h *Handler) requireProjectOwner(r *http.Request, projectID string) (*session.Claims, error) {
-	claims, err := session.FromRequest(h.sessionMgr, r)
-	if err != nil {
-		return nil, err
-	}
-	if claims.Role == "platform_admin" {
-		return claims, nil
-	}
-	role, err := h.membersSvc.Repo().GetRole(r.Context(), projectID, claims.UserID)
-	if err != nil {
-		return nil, httpx.Forbidden("not a project member")
-	}
-	if role != "owner" {
-		return nil, httpx.Forbidden("owner required")
-	}
-	return claims, nil
+	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "owner")
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {

@@ -62,13 +62,20 @@ func (s *Service) Count(ctx context.Context) (int64, error) {
 	return s.repo.Count(ctx)
 }
 
+var ValidUserRoles = map[string]bool{"user": true, "platform_admin": true}
+
 func (s *Service) Update(ctx context.Context, id, name, role string) error {
+	if role != "" && !ValidUserRoles[role] {
+		return fmt.Errorf("invalid role")
+	}
 	u, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
 	u.Name = name
-	u.Role = role
+	if role != "" {
+		u.Role = role
+	}
 	return s.repo.Update(ctx, u)
 }
 

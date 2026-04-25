@@ -20,7 +20,12 @@ func (s *Service) Repo() *Repo {
 	return s.repo
 }
 
+var validRoles = map[string]bool{"owner": true, "developer": true, "guest": true}
+
 func (s *Service) Add(ctx context.Context, projectID, email, role string) (*Member, error) {
+	if !validRoles[role] {
+		return nil, fmt.Errorf("invalid role: %s", role)
+	}
 	u, err := s.usersRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -38,6 +43,19 @@ func (s *Service) Add(ctx context.Context, projectID, email, role string) (*Memb
 }
 
 func (s *Service) Remove(ctx context.Context, projectID, userID string) error {
+	role, err := s.repo.GetRole(ctx, projectID, userID)
+	if err != nil {
+		return fmt.Errorf("get role: %w", err)
+	}
+	if role == "owner" {
+		owners, err := s.repo.CountOwners(ctx, projectID)
+		if err != nil {
+			return fmt.Errorf("count owners: %w", err)
+		}
+		if owners <= 1 {
+			return fmt.Errorf("cannot remove the last owner")
+		}
+	}
 	return s.repo.Remove(ctx, projectID, userID)
 }
 
