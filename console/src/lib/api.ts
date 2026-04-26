@@ -22,7 +22,14 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
     throw new APIError(401, { message: 'Unauthorized' })
   }
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
+    let data: unknown
+    const contentType = res.headers.get('content-type')
+    if (contentType && contentType.includes('application/json')) {
+      data = await res.json().catch(() => ({}))
+    } else {
+      const text = await res.text().catch(() => '')
+      data = { message: text || `Request failed with status ${res.status}` }
+    }
     throw new APIError(res.status, data)
   }
   if (res.status === 204) return undefined as T

@@ -67,13 +67,16 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	var subject string
 	var userID string
+	var userRole string
+	var robot *robots.RobotToken
 	var isRobot bool
 
 	if auth.IsRobotUsername(username) {
-		robot, err := h.robotsSvc.Authenticate(r.Context(), username, password)
+		var err error
+		robot, err = h.robotsSvc.Authenticate(r.Context(), username, password)
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
-			httpx.JSONError(w, httpx.Unauthorized("invalid robot credentials"))
+			httpx.JSONError(w, httpx.Unauthorized("invalid credentials"))
 			return
 		}
 		subject = robot.Username
@@ -87,6 +90,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		}
 		subject = u.Email
 		userID = u.ID
+		userRole = u.Role
 	}
 
 	service := r.URL.Query().Get("service")
@@ -97,25 +101,6 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	var access []AccessEntry
 
-	// Fetch user role once to avoid N+1 queries per scope
-	var userRole string
-	if !isRobot {
-		u, err := h.usersSvc.GetByID(r.Context(), userID)
-		if err == nil {
-			userRole = u.Role
-		}
-	}
-
-	// Fetch robot once if needed to avoid N+1 queries per scope
-	var robot *robots.RobotToken
-	if isRobot {
-		var err error
-		robot, err = h.robotsSvc.GetByUsername(r.Context(), subject)
-		if err != nil {
-			robot = nil
-		}
-	}
-
 	for _, scopeStr := range scopes {
 		parsed, err := ParseScope(scopeStr)
 		if err != nil {
@@ -123,9 +108,6 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		}
 		var allowed []string
 		if isRobot {
-			if robot == nil {
-				continue
-			}
 			allowed = h.robotsSvc.ResolveProjectScope(robot, parsed.Type, parsed.Name, parsed.Actions)
 		} else {
 			allowed = h.resolveUserScope(r.Context(), userID, userRole, parsed.Type, parsed.Name, parsed.Actions)

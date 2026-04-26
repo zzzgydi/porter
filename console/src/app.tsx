@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './lib/api'
 import { AuthContext, type AuthUser } from './lib/auth'
@@ -7,7 +7,6 @@ import { Shell } from './components/layout/shell'
 
 export function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const navigate = useNavigate()
   const location = useLocation()
 
   const { data, isLoading } = useQuery({
@@ -22,12 +21,6 @@ export function App() {
     }
   }, [data])
 
-  useEffect(() => {
-    if (!isLoading && !user && location.pathname !== '/login') {
-      navigate('/login', { replace: true })
-    }
-  }, [isLoading, user, location.pathname, navigate])
-
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -36,7 +29,9 @@ export function App() {
     )
   }
 
-  if (!user) return null
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
 
   return (
     <AuthContext.Provider value={{ user, setUser }}>

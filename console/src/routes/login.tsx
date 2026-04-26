@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,12 +10,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Container } from 'lucide-react'
 
 export function LoginPage() {
+  const { user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const qc = useQueryClient()
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -25,8 +31,18 @@ export function LoginPage() {
       qc.invalidateQueries({ queryKey: ['me'] })
       navigate('/dashboard')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Invalid credentials'
-      setError(msg)
+      if (err instanceof api.APIError) {
+        if (err.status === 401) {
+          setError('Invalid email or password')
+        } else if (err.status === 429) {
+          setError('Too many login attempts. Please try again later.')
+        } else {
+          const data = err.data as { message?: string } | undefined
+          setError(data?.message || 'Login failed. Please try again.')
+        }
+      } else {
+        setError('Network error. Please try again.')
+      }
     } finally {
       setLoading(false)
     }

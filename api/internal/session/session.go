@@ -1,21 +1,18 @@
 package session
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
+
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 type Claims struct {
 	UserID string `json:"sub"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
-	Exp    int64  `json:"exp"`
 }
 
 type Manager struct {
@@ -27,49 +24,40 @@ func NewManager(secret string) *Manager {
 }
 
 func (sm *Manager) Issue(userID, email, role string, ttl time.Duration) (string, error) {
-	claims := Claims{
-		UserID: userID,
-		Email:  email,
-		Role:   role,
-		Exp:    time.Now().Add(ttl).Unix(),
-	}
-	payload, err := json.Marshal(claims)
+	tok := jwt.New()
+	_ = tok.Set(jwt.SubjectKey, userID)
+	_ = tok.Set("email", email)
+	_ = tok.Set("role", role)
+	_ = tok.Set(jwt.IssuedAtKey, time.Now())
+	_ = tok.Set(jwt.NotBeforeKey, time.Now().Add(-10*time.Second))
+	_ = tok.Set(jwt.ExpirationKey, time.Now().Add(ttl))
+
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.HS256, sm.secret))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("sign token: %w", err)
 	}
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
-	body := base64.RawURLEncoding.EncodeToString(payload)
-	sig := sm.sign(header + "." + body)
-	return header + "." + body + "." + sig, nil
+	return string(signed), nil
 }
 
 func (sm *Manager) Parse(token string) (*Claims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid token format")
-	}
-	expectedSig := sm.sign(parts[0] + "." + parts[1])
-	if !hmac.Equal([]byte(expectedSig), []byte(parts[2])) {
-		return nil, fmt.Errorf("invalid signature")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	tok, err := jwt.ParseString(token,
+		jwt.WithKey(jwa.HS256, sm.secret),
+		jwt.WithValidate(true),
+		jwt.WithAcceptableSkew(5*time.Second),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("decode payload: %w", err)
+		return nil, fmt.Errorf("invalid token: %w", err)
 	}
-	var claims Claims
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("unmarshal claims: %w", err)
-	}
-	if time.Now().Unix() > claims.Exp {
-		return nil, fmt.Errorf("token expired")
-	}
-	return &claims, nil
-}
 
-func (sm *Manager) sign(msg string) string {
-	mac := hmac.New(sha256.New, sm.secret)
-	mac.Write([]byte(msg))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	claims := &Claims{}
+	claims.UserID = tok.Subject()
+	if v, ok := tok.Get("email"); ok {
+		claims.Email, _ = v.(string)
+	}
+	if v, ok := tok.Get("role"); ok {
+		claims.Role, _ = v.(string)
+	}
+	return claims, nil
 }
 
 func (sm *Manager) Cookie(token string, secure bool, ttl time.Duration) *http.Cookie {

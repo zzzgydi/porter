@@ -29,32 +29,36 @@ func (c *Client) Ping(ctx context.Context) error {
 	return nil
 }
 
+// rateLimitScript atomically cleans expired entries, checks the limit, and adds a new entry.
+// KEYS[1] = key
+// ARGV[1] = windowStart (score to remove up to)
+// ARGV[2] = now (score for new member)
+// ARGV[3] = member
+// ARGV[4] = limit
+// ARGV[5] = ttl in seconds
+var rateLimitScript = redis.NewScript(`
+	redis.call("ZREMRANGEBYSCORE", KEYS[1], "0", ARGV[1])
+	local count = redis.call("ZCARD", KEYS[1])
+	if tonumber(count) >= tonumber(ARGV[4]) then
+		return 0
+	end
+	redis.call("ZADD", KEYS[1], ARGV[2], ARGV[3])
+	redis.call("EXPIRE", KEYS[1], ARGV[5])
+	return 1
+`)
+
 func (c *Client) RateLimit(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	now := time.Now().Unix()
 	windowStart := now - int64(window.Seconds())
+	member := fmt.Sprintf("%d:%s", now, uuid.New().String())
 
-	_, err := c.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", windowStart)).Result()
+	result, err := rateLimitScript.Run(ctx, c.Client, []string{key},
+		windowStart, now, member, limit, int(window.Seconds()),
+	).Int()
 	if err != nil {
 		return false, err
 	}
-
-	count, err := c.ZCard(ctx, key).Result()
-	if err != nil {
-		return false, err
-	}
-
-	if count >= int64(limit) {
-		return false, nil
-	}
-
-	pipe := c.Pipeline()
-	pipe.ZAdd(ctx, key, redis.Z{Score: float64(now), Member: fmt.Sprintf("%d:%s", now, uuid.New().String())})
-	pipe.Expire(ctx, key, window)
-	_, err = pipe.Exec(ctx)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return result == 1, nil
 }
 
 func (c *Client) MarkWebhookEvent(ctx context.Context, eventID string, ttl time.Duration) (bool, error) {

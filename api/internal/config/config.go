@@ -34,6 +34,8 @@ type Config struct {
 
 	ConsoleOrigin string
 
+	TrustedProxies []string
+
 	DevMode bool
 }
 
@@ -60,6 +62,7 @@ func Load() (*Config, error) {
 		APIJWTSecret:           mustEnv("API_JWT_SECRET"),
 		BootstrapAdminEmail:    os.Getenv("BOOTSTRAP_ADMIN_EMAIL"),
 		BootstrapAdminPassword: os.Getenv("BOOTSTRAP_ADMIN_PASSWORD"),
+		TrustedProxies:         parseTrustedProxies(os.Getenv("TRUSTED_PROXIES")),
 		DevMode:                strings.ToLower(os.Getenv("DEV_MODE")) == "true",
 	}
 
@@ -78,6 +81,21 @@ func (c *Config) GetConsoleOrigin() string {
 
 func (c *Config) TokenTTL() time.Duration {
 	return 15 * time.Minute
+}
+
+func parseTrustedProxies(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func getenv(key, fallback string) string {

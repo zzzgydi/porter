@@ -11,7 +11,11 @@ export function Header() {
   const qc = useQueryClient()
 
   async function handleLogout() {
-    await api.logout()
+    try {
+      await api.logout()
+    } catch {
+      // Ignore logout API errors; still clear local state
+    }
     qc.clear()
     setUser(null)
     navigate('/login')

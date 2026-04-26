@@ -14,7 +14,10 @@ import { SettingsPage } from './routes/settings'
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  if (user?.role !== 'platform_admin') {
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+  if (user.role !== 'platform_admin') {
     return <Navigate to="/dashboard" replace />
   }
   return children

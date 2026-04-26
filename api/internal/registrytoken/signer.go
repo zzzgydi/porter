@@ -26,11 +26,21 @@ type AccessEntry struct {
 
 type Signer struct {
 	key    *rsa.PrivateKey
+	jwkKey jwk.Key
 	kid    string
 	issuer string
 }
 
 func NewSigner(privateKeyPath string) (*Signer, error) {
+	info, err := os.Stat(privateKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("stat private key: %w", err)
+	}
+	mode := info.Mode().Perm()
+	if mode != 0600 {
+		return nil, fmt.Errorf("private key %s has permissions %04o; expected 0600", privateKeyPath, mode)
+	}
+
 	data, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read private key: %w", err)
@@ -55,9 +65,21 @@ func NewSigner(privateKeyPath string) (*Signer, error) {
 		}
 	}
 
+	kid, err := deriveKid(key)
+	if err != nil {
+		return nil, fmt.Errorf("derive kid: %w", err)
+	}
+
+	jwkKey, err := jwk.FromRaw(key)
+	if err != nil {
+		return nil, fmt.Errorf("jwk from raw: %w", err)
+	}
+	_ = jwkKey.Set(jwk.KeyIDKey, kid)
+
 	return &Signer{
-		key: key,
-		kid: deriveKid(key),
+		key:    key,
+		jwkKey: jwkKey,
+		kid:    kid,
 	}, nil
 }
 
@@ -76,20 +98,14 @@ func (s *Signer) Sign(subject, audience string, access []AccessEntry, ttl time.D
 	_ = tok.Set(jwt.JwtIDKey, uuid.New().String())
 	_ = tok.Set("access", access)
 
-	jwkKey, err := jwk.FromRaw(s.key)
-	if err != nil {
-		return "", fmt.Errorf("jwk from raw: %w", err)
-	}
-	_ = jwkKey.Set(jwk.KeyIDKey, s.kid)
-
-	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256, jwkKey))
+	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256, s.jwkKey))
 	if err != nil {
 		return "", fmt.Errorf("sign token: %w", err)
 	}
 	return string(signed), nil
 }
 
-func deriveKid(key *rsa.PrivateKey) string {
+func deriveKid(key *rsa.PrivateKey) (string, error) {
 	// RFC 7638 JWK thumbprint for RSA: SHA256 of {"e":"...","kty":"RSA","n":"..."}
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
 	n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
@@ -99,8 +115,8 @@ func deriveKid(key *rsa.PrivateKey) string {
 		"n":   n,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("jwk marshal failed: %v", err))
+		return "", fmt.Errorf("jwk marshal failed: %w", err)
 	}
 	hash := sha256.Sum256(jwkJSON)
-	return base64.RawURLEncoding.EncodeToString(hash[:])
+	return base64.RawURLEncoding.EncodeToString(hash[:]), nil
 }

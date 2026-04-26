@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -41,7 +42,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := h.usersSvc.GetByID(r.Context(), claims.UserID)
 	if err != nil {
-		httpx.JSONError(w, httpx.Unauthorized("user not found"))
+		if errors.Is(err, users.ErrUserNotFound) {
+			httpx.JSONError(w, httpx.Unauthorized("user not found"))
+		} else {
+			httpx.JSONError(w, httpx.Internal("db error"))
+		}
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
@@ -73,6 +78,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.JSONError(w, httpx.Unauthorized("invalid credentials"))
 		return
 	}
+	// Prevent session fixation: clear any existing session before issuing a new one.
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 	ttl := 7 * 24 * time.Hour
 	token, err := h.sessionMgr.Issue(u.ID, u.Email, u.Role, ttl)
 	if err != nil {

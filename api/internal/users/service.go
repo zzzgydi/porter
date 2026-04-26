@@ -2,10 +2,14 @@ package users
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/zzzgydi/porter/api/internal/password"
 )
+
+var ErrUserNotFound = errors.New("user not found")
 
 type Service struct {
 	repo *Repo
@@ -47,11 +51,25 @@ func (s *Service) Authenticate(ctx context.Context, email, plainPassword string)
 }
 
 func (s *Service) GetByID(ctx context.Context, id string) (*User, error) {
-	return s.repo.GetByID(ctx, id)
+	u, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return u, nil
 }
 
 func (s *Service) GetByEmail(ctx context.Context, email string) (*User, error) {
-	return s.repo.GetByEmail(ctx, email)
+	u, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return u, nil
 }
 
 func (s *Service) List(ctx context.Context) ([]User, error) {

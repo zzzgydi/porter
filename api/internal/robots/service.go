@@ -34,10 +34,14 @@ func (s *Service) Create(ctx context.Context, projectID, name string, perms map[
 	username := fmt.Sprintf("robot$%s-%s", p.Name, name)
 	permsJSON, _ := json.Marshal(perms)
 
+	tokenHash := auth.HashRobotToken(tokenRaw)
+	if tokenHash == "" {
+		return nil, "", fmt.Errorf("hash robot token failed")
+	}
 	t := &RobotToken{
 		Name:      name,
 		Username:  username,
-		TokenHash: auth.HashRobotToken(tokenRaw),
+		TokenHash: tokenHash,
 		ProjectID: projectID,
 		Permissions: permsJSON,
 	}
@@ -69,8 +73,7 @@ func (s *Service) Authenticate(ctx context.Context, username, password string) (
 	if err != nil {
 		return nil, fmt.Errorf("invalid credentials")
 	}
-	hash := auth.HashRobotToken(password)
-	if !auth.ConstantTimeEqual(hash, t.TokenHash) {
+	if !auth.CheckRobotToken(password, t.TokenHash) {
 		return nil, fmt.Errorf("invalid credentials")
 	}
 	return t, nil

@@ -42,9 +42,15 @@ type Deps struct {
 func New(deps Deps) http.Handler {
 	r := chi.NewRouter()
 
+	if extractor, err := httpx.NewClientIPExtractor(deps.Config.TrustedProxies); err == nil {
+		httpx.SetClientIPExtractor(extractor)
+	}
+
 	r.Use(httpx.RequestID)
 	r.Use(httpx.Logger(deps.Logger))
 	r.Use(httpx.Recoverer)
+	r.Use(httpx.SecurityHeaders)
+	r.Use(httpx.MaxBodySize(1 << 20)) // 1 MB
 	r.Use(httpx.CORS(deps.Config.GetConsoleOrigin()))
 
 	// Public
