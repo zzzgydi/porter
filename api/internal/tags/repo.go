@@ -33,7 +33,7 @@ func (r *Repo) Upsert(ctx context.Context, t *Tag) error {
 	return r.pool.QueryRow(ctx, `
 		INSERT INTO tags (repository_id, name, digest, media_type, size_bytes, pushed_by, pushed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, now())
-		ON CONFLICT (repository_id, name) DO UPDATE SET
+		ON CONFLICT (repository_id, name) WHERE deleted_at IS NULL DO UPDATE SET
 			digest = EXCLUDED.digest,
 			media_type = EXCLUDED.media_type,
 			size_bytes = EXCLUDED.size_bytes,
