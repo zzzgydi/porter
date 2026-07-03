@@ -62,6 +62,7 @@ func Load() (*Config, error) {
 		APIJWTSecret:           mustEnv("API_JWT_SECRET"),
 		BootstrapAdminEmail:    os.Getenv("BOOTSTRAP_ADMIN_EMAIL"),
 		BootstrapAdminPassword: os.Getenv("BOOTSTRAP_ADMIN_PASSWORD"),
+		ConsoleOrigin:          os.Getenv("CONSOLE_ORIGIN"),
 		TrustedProxies:         parseTrustedProxies(os.Getenv("TRUSTED_PROXIES")),
 		DevMode:                strings.ToLower(os.Getenv("DEV_MODE")) == "true",
 	}

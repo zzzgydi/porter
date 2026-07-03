@@ -1,12 +1,15 @@
 services:
   registry:
-    image: registry:3.1.0
+    build:
+      context: ./registry
     container_name: registry-core
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"
     environment:
       REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:-change_me_registry_http_secret}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - ./registry/config.dev.yml:/etc/distribution/config.yml.template:ro
       - ./registry/certs:/certs:ro
@@ -72,6 +75,7 @@ services:
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/secrets/auth.key
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       API_JWT_SECRET: ${API_JWT_SECRET}
+      CONSOLE_ORIGIN: ${CONSOLE_ORIGIN:-http://localhost:4173}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
@@ -92,12 +96,14 @@ services:
   console:
     build:
       context: ./console
+      args:
+        VITE_API_BASE_URL: http://localhost:3000
     container_name: registry-console
     restart: unless-stopped
     ports:
       - "127.0.0.1:4173:4173"
     environment:
-      VITE_API_BASE_URL: http://localhost:3000/api
+      VITE_API_BASE_URL: http://localhost:3000
     depends_on:
       - api
 
