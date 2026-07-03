@@ -1,46 +1,49 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
-import { useAuth } from './lib/auth'
-import { App } from './app'
-import { LoginPage } from './routes/login'
-import { DashboardPage } from './routes/dashboard'
-import { ProjectsPage } from './routes/projects/list'
-import { ProjectDetailPage } from './routes/projects/detail'
-import { ProjectMembersPage } from './routes/projects/members'
-import { RepositoryDetailPage } from './routes/repositories/detail'
-import { RobotTokensPage } from './routes/robot-tokens'
-import { UsersPage } from './routes/users'
-import { AuditLogsPage } from './routes/audit-logs'
-import { SettingsPage } from './routes/settings'
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import { useAuth } from "./lib/auth";
+import { App } from "./app";
+import { LoginPage } from "./routes/login";
+import { DashboardPage } from "./routes/dashboard";
+import { ProjectsPage } from "./routes/projects/list";
+import { ProjectDetailPage } from "./routes/projects/detail";
+import { ProjectMembersPage } from "./routes/projects/members";
+import { RepositoryDetailPage } from "./routes/repositories/detail";
+import { RobotTokensPage } from "./routes/robot-tokens";
+import { UsersPage } from "./routes/users";
+import { AuditLogsPage } from "./routes/audit-logs";
+import { SettingsPage } from "./routes/settings";
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user } = useAuth();
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
-  if (user.role !== 'platform_admin') {
-    return <Navigate to="/dashboard" replace />
+  if (user.role !== "platform_admin") {
+    return <Navigate to="/dashboard" replace />;
   }
-  return children
+  return children;
 }
 
 export const router = createBrowserRouter([
   {
-    path: '/login',
+    path: "/login",
     element: <LoginPage />,
   },
   {
-    path: '/',
+    path: "/",
     element: <App />,
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'projects', element: <ProjectsPage /> },
-      { path: 'projects/:project', element: <ProjectDetailPage /> },
-      { path: 'projects/:project/members', element: <ProjectMembersPage /> },
-      { path: 'projects/:project/repositories/:repo', element: <RepositoryDetailPage /> },
-      { path: 'robot-tokens', element: <RobotTokensPage /> },
+      { path: "dashboard", element: <DashboardPage /> },
+      { path: "projects", element: <ProjectsPage /> },
+      { path: "projects/:project", element: <ProjectDetailPage /> },
+      { path: "projects/:project/members", element: <ProjectMembersPage /> },
       {
-        path: 'users',
+        path: "projects/:project/repositories/:repo",
+        element: <RepositoryDetailPage />,
+      },
+      { path: "robot-tokens", element: <RobotTokensPage /> },
+      {
+        path: "users",
         element: (
           <RequireAdmin>
             <UsersPage />
@@ -48,14 +51,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'audit-logs',
+        path: "audit-logs",
         element: (
           <RequireAdmin>
             <AuditLogsPage />
           </RequireAdmin>
         ),
       },
-      { path: 'settings', element: <SettingsPage /> },
+      { path: "settings", element: <SettingsPage /> },
     ],
   },
-])
+]);

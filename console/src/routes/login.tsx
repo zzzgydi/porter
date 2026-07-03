@@ -1,50 +1,54 @@
-import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useAuth } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Container } from 'lucide-react'
+import { useState } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
+import { api, APIError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Container } from "lucide-react";
 
 export function LoginPage() {
-  const { user } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
-  const qc = useQueryClient()
+  const { user, setUser } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   if (user) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError("");
+    setLoading(true);
     try {
-      await api.login(email, password)
-      qc.invalidateQueries({ queryKey: ['me'] })
-      navigate('/dashboard')
+      const data = await api.login(email, password);
+      setUser(data);
+      navigate("/dashboard");
     } catch (err) {
-      if (err instanceof api.APIError) {
+      if (err instanceof APIError) {
         if (err.status === 401) {
-          setError('Invalid email or password')
+          setError("Invalid email or password");
         } else if (err.status === 429) {
-          setError('Too many login attempts. Please try again later.')
+          setError("Too many login attempts. Please try again later.");
         } else {
-          const data = err.data as { message?: string } | undefined
-          setError(data?.message || 'Login failed. Please try again.')
+          const data = err.data as { message?: string } | undefined;
+          setError(data?.message || "Login failed. Please try again.");
         }
       } else {
-        setError('Network error. Please try again.')
+        setError("Network error. Please try again.");
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -82,11 +86,11 @@ export function LoginPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
