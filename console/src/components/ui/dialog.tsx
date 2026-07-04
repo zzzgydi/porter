@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
-import { type HTMLAttributes, type ReactNode, createContext, useContext, useState } from 'react'
+import { type HTMLAttributes, type ReactNode, createContext, useContext, useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 
 interface DialogContextValue {
   open: boolean
@@ -33,12 +34,30 @@ export function DialogTrigger({ children, asChild }: { children: ReactNode; asCh
 
 export function DialogContent({ children, className }: { children: ReactNode; className?: string }) {
   const { open, setOpen } = useContext(DialogContext)
-  if (!open) return null
+  const [show, setShow] = useState(open)
+
+  useEffect(() => {
+    if (open) {
+      setShow(true)
+    } else {
+      const t = setTimeout(() => setShow(false), 150)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
+  if (!show) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-opacity duration-150',
+        open ? 'opacity-100' : 'opacity-0',
+      )}
+      onClick={() => setOpen(false)}
+    >
       <div
         className={cn(
-          'relative z-50 grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 rounded-lg',
+          'relative z-50 grid w-full max-w-lg gap-4 rounded-xl border bg-background p-6 shadow-lg transition-all duration-150',
+          open ? 'scale-100 opacity-100' : 'scale-[0.96] opacity-0',
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -49,7 +68,7 @@ export function DialogContent({ children, className }: { children: ReactNode; cl
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <span className="sr-only">Close</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>

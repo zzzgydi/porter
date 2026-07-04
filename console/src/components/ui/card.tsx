@@ -3,7 +3,14 @@ import { type HTMLAttributes, forwardRef } from 'react'
 
 export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)} {...props} />
+    <div
+      ref={ref}
+      className={cn(
+        'rounded-xl border bg-card text-card-foreground shadow-card transition-shadow duration-200 hover:shadow-card-hover',
+        className,
+      )}
+      {...props}
+    />
   ),
 )
 Card.displayName = 'Card'
@@ -17,7 +24,11 @@ CardHeader.displayName = 'CardHeader'
 
 export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn('text-2xl font-semibold leading-none tracking-tight', className)} {...props} />
+    <h3
+      ref={ref}
+      className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+      {...props}
+    />
   ),
 )
 CardTitle.displayName = 'CardTitle'
@@ -33,3 +44,10 @@ export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
   ({ className, ...props }, ref) => <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />,
 )
 CardContent.displayName = 'CardContent'
+
+export const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn('flex items-center p-6 pt-0', className)} {...props} />
+  ),
+)
+CardFooter.displayName = 'CardFooter'
