@@ -75,6 +75,20 @@ There are **two separate auth systems**:
 - **Registry tokens:** RS256 JWTs, short-lived (15 min), signed with RSA private key. Used by Docker CLI.
 - **Console sessions:** HMAC-SHA256 "JWT-like" tokens, long-lived (7 days), stored in `HttpOnly` cookies. Used by the React console. See `api/internal/session/session.go`.
 
+### API Response Format
+
+All JSON API responses use a standard envelope:
+
+```json
+{ "code": 200, "msg": "", "data": ... }
+```
+
+- `code` mirrors the HTTP status code.
+- `msg` carries a human-readable message on errors.
+- `data` contains the payload on success.
+
+Handlers write responses via `httpx.JSON` in `api/internal/httpx/errors.go`. The Docker registry token endpoint (`GET /api/registry/token`) is the one exception: it uses `httpx.RawJSON` to preserve the exact token format the Docker CLI expects. The React console fetch wrapper in `console/src/lib/api.ts` automatically unwraps the `data` field.
+
 ### Permission Model
 
 - **Global:** `platform_admin` (full access), `user` (regular user)
