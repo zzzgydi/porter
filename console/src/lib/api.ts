@@ -11,12 +11,18 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
+interface APIResponse<T> {
+  code: number;
+  msg: string;
+  data: T;
+}
+
 export class APIError extends Error {
   constructor(
     public status: number,
-    public data: unknown,
+    public data: { msg?: string; message?: string },
   ) {
-    super(`API error ${status}`);
+    super(data?.msg || data?.message || `API error ${status}`);
   }
 }
 
@@ -30,21 +36,22 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
     ...opts,
   });
   if (res.status === 401) {
-    throw new APIError(401, { message: "Unauthorized" });
+    throw new APIError(401, { msg: "Unauthorized" });
   }
   if (!res.ok) {
-    let data: unknown;
+    let data: { msg?: string; message?: string } = {};
     const contentType = res.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       data = await res.json().catch(() => ({}));
     } else {
       const text = await res.text().catch(() => "");
-      data = { message: text || `Request failed with status ${res.status}` };
+      data = { msg: text || `Request failed with status ${res.status}` };
     }
     throw new APIError(res.status, data);
   }
   if (res.status === 204) return undefined as T;
-  return res.json();
+  const json = (await res.json()) as APIResponse<T>;
+  return json.data;
 }
 
 export const api = {
