@@ -12,7 +12,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Container } from "lucide-react";
+import { Container, AlertCircle } from "lucide-react";
 
 export function LoginPage() {
   const { user, setUser } = useAuth();
@@ -41,8 +41,7 @@ export function LoginPage() {
         } else if (err.status === 429) {
           setError("Too many login attempts. Please try again later.");
         } else {
-          const data = err.data as { message?: string } | undefined;
-          setError(data?.message || "Login failed. Please try again.");
+          setError(err.message || "Login failed. Please try again.");
         }
       } else {
         setError("Network error. Please try again.");
@@ -53,11 +52,11 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-muted/30">
-      <Card className="w-full max-w-sm">
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-sm shadow-card-hover">
         <CardHeader className="text-center">
-          <div className="flex justify-center">
-            <Container className="h-8 w-8 text-primary" />
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+            <Container className="h-7 w-7 text-primary" />
           </div>
           <CardTitle className="text-xl">Porter Console</CardTitle>
           <CardDescription>Sign in to manage your registry</CardDescription>
@@ -71,6 +70,7 @@ export function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 required
               />
             </div>
@@ -81,12 +81,18 @@ export function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 required
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+            <Button type="submit" className="w-full" loading={loading}>
+              Sign in
             </Button>
           </form>
         </CardContent>
