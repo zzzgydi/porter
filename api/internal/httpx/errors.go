@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+// HTTPError is the internal error type used by handlers.
+// On the wire it is rendered as a Response with Msg set to Message.
 type HTTPError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -20,6 +22,13 @@ func Conflict(msg string) error        { return HTTPError{Code: http.StatusConfl
 func TooManyRequests(msg string) error { return HTTPError{Code: http.StatusTooManyRequests, Message: msg} }
 func Internal(msg string) error        { return HTTPError{Code: http.StatusInternalServerError, Message: msg} }
 
+// Response is the standard API response envelope.
+type Response struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data any    `json:"data,omitempty"`
+}
+
 func JSONError(w http.ResponseWriter, err error) {
 	he := HTTPError{Code: http.StatusInternalServerError, Message: "internal error"}
 	if e, ok := err.(HTTPError); ok {
@@ -27,10 +36,19 @@ func JSONError(w http.ResponseWriter, err error) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(he.Code)
-	_ = json.NewEncoder(w).Encode(he)
+	_ = json.NewEncoder(w).Encode(Response{Code: he.Code, Msg: he.Message})
 }
 
+// JSON writes a standard wrapped response: {"code": status, "msg": "", "data": v}.
 func JSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(Response{Code: status, Data: v})
+}
+
+// RawJSON writes the value directly without the Response wrapper.
+// It is used for endpoints that must return a specific wire format (e.g. Docker registry token).
+func RawJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)

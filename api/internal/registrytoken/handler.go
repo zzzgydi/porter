@@ -125,7 +125,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.JSON(w, http.StatusOK, map[string]any{
+	httpx.RawJSON(w, http.StatusOK, map[string]any{
 		"token":        token,
 		"access_token": token,
 		"expires_in":   int(h.ttl.Seconds()),
