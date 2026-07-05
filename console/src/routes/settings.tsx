@@ -3,7 +3,10 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Settings as SettingsIcon, Info, Server, Database, Shield, Container } from 'lucide-react'
 
+const REGISTRY_HOST = import.meta.env.VITE_REGISTRY_PUBLIC_URL || `http://${window.location.host}`
+
 export function SettingsPage() {
+  const registryHost = REGISTRY_HOST.replace(/^https?:\/\//, '')
   return (
     <div className="space-y-6">
       <div>
@@ -49,7 +52,7 @@ export function SettingsPage() {
           <div className="space-y-2">
             <p className="text-muted-foreground">Use the following command to log in:</p>
             <code className="block rounded-lg border bg-muted/50 p-3 font-mono text-xs">
-              docker login {window.location.host}
+              docker login {registryHost}
             </code>
           </div>
           <Separator />

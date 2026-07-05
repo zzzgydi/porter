@@ -104,12 +104,14 @@ services:
       context: ./console
       args:
         VITE_API_BASE_URL: ${CONSOLE_API_URL}
+        VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL}
     container_name: registry-console
     restart: unless-stopped
     ports:
       - "127.0.0.1:4173:4173"
     environment:
       VITE_API_BASE_URL: ${CONSOLE_API_URL}
+      VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL}
     depends_on:
       - api
 
