@@ -13,7 +13,7 @@ Docker CLI / CI / CD
         |
         +-- registry.example.com  -> registry:3.1.0 (Token 认证, R2/FS 存储)
         |
-        +-- console.example.com   -> Vite React + Go API 服务
+        +-- console.example.com   -> Go API 服务 + 内置 Console SPA
                                         |
                                         +-- Postgres (业务数据)
                                         +-- Redis (缓存, 限流)
@@ -61,6 +61,10 @@ docker compose -f docker-compose.dev.yml up -d --build
 - Registry: `http://localhost:5000`
 - Console: `http://localhost:4173`
 - API: `http://localhost:3000`
+
+开发 Compose 会特意保留 `:4173` 的独立 Console，并通过
+`http://localhost:${API_PORT:-3000}` 访问 API；生产环境则由 API 端口直接提供内置的
+Console。
 
 ### 4. 验证 Registry 挑战
 
@@ -112,6 +116,14 @@ docker pull localhost:5000/demo/alpine:latest
 
 ## 生产环境部署
 
+生产镜像会在构建阶段编译 Console，并将静态文件复制进最终的 Go API 镜像。浏览器和
+API 因而使用同一 Origin，运行时不需要 `registry-console` 容器或 `CONSOLE_API_URL`；
+Node 只在 `docker compose build` 阶段使用。
+
+完整的、可直接在服务器执行的单机生产部署流程（服务器初始化、R2、DNS/TLS、
+Nginx、`.env`、验收、备份、升级和 GC）请见
+[生产部署手册](docs/deployment.zh.md)。下面保留的是概要。
+
 ### 1. 准备 R2 存储桶
 
 在 Cloudflare R2 创建一个存储桶，并创建具有「对象读写」权限的 API 令牌。
@@ -128,8 +140,7 @@ docker pull localhost:5000/demo/alpine:latest
 
 ```
 registry.example.com  -> 127.0.0.1:5000
-console.example.com   -> 127.0.0.1:4173
-  /api/*              -> 127.0.0.1:3000
+console.example.com   -> 127.0.0.1:3000  （API + Console SPA）
 ```
 
 参考 `nginx.example.conf` 获取 Nginx 配置示例。
@@ -147,7 +158,11 @@ cp .env.example .env
 ```
 
 编辑 `.env`，将所有 `change_me_*` 替换为强密码。
-将 `REGISTRY_PUBLIC_URL` 和 `CONSOLE_API_URL` 设置为你的真实公网地址。
+将 `REGISTRY_PUBLIC_URL` 和 `CONSOLE_ORIGIN` 设置为你的真实公网地址。
+同时将 `CONSOLE_ORIGIN` 设置为控制台公网地址、`REGISTRY_SERVICE` 设置为 Registry
+域名、`REGISTRY_TOKEN_REALM` 设置为控制台公网地址加
+`/api/registry/token`。
+Console 通过同源 `/api` 调用后端；生产 `.env` 中若仍有旧的 `CONSOLE_API_URL`，可删除。
 
 ### 5. 检查 Registry 配置
 
@@ -158,7 +173,7 @@ cp .env.example .env
 ### 6. 部署
 
 ```bash
-docker compose -f docker-compose.yml up -d --build
+docker compose -f docker-compose.yml up -d --build --remove-orphans
 ```
 
 ## 目录结构
@@ -206,7 +221,7 @@ docker compose -f docker-compose.yml up -d --build
 - [ ] R2 API 令牌仅授权给 Registry 存储桶
 - [ ] 不将 Postgres/Redis 端口暴露到公网（服务绑定在 127.0.0.1）
 - [ ] 定期轮换 `auth.key`（需要重新配置 Registry）
-- [ ] 为控制台用户启用双因素认证（未来功能）
+- [ ] 在异地备份 PostgreSQL、R2 bucket、`.env` 和 `registry/certs/`
 
 ## API 端点
 

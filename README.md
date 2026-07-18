@@ -13,7 +13,7 @@ Docker CLI / CI / CD
         |
         +-- registry.example.com  -> registry:3.1.0 (Token Auth, R2/FS storage)
         |
-        +-- console.example.com   -> Vite React + Go API Server
+        +-- console.example.com   -> Go API Server + bundled Console SPA
                                         |
                                         +-- Postgres (business data)
                                         +-- Redis (cache, rate limit)
@@ -61,6 +61,10 @@ Services will be available at:
 - Registry: `http://localhost:5000`
 - Console: `http://localhost:4173`
 - API: `http://localhost:3000`
+
+The development Compose file intentionally keeps the Console on `:4173`; it
+uses `http://localhost:${API_PORT:-3000}` as its API base. Production instead
+serves the bundled Console from the API port.
 
 ### 4. Verify registry challenge
 
@@ -112,6 +116,11 @@ You should see the `latest` tag with digest, size, and pushed time.
 
 ## Production Deployment
 
+In production, `api/Dockerfile` builds the Console and copies the resulting
+static files into the final Go image. The browser and API therefore share one
+origin; no `registry-console` container or `CONSOLE_API_URL` is needed at
+runtime. Node is used only during `docker compose build`.
+
 ### 1. Prepare R2 bucket
 
 Create a Cloudflare R2 bucket and API token with Object Read & Write permissions.
@@ -128,8 +137,7 @@ Use certbot or any CA on your host machine. Configure your host nginx (or anothe
 
 ```
 registry.example.com  -> 127.0.0.1:5000
-console.example.com   -> 127.0.0.1:4173
-  /api/*              -> 127.0.0.1:3000
+console.example.com   -> 127.0.0.1:3000  (API + console SPA)
 ```
 
 See `nginx.example.conf` for a reference nginx configuration.
@@ -147,7 +155,9 @@ cp .env.example .env
 ```
 
 Edit `.env` and replace all `change_me_*` placeholders with strong secrets.
-Set `REGISTRY_PUBLIC_URL` and `CONSOLE_API_URL` to your real public URLs.
+Set `REGISTRY_PUBLIC_URL` and `CONSOLE_ORIGIN` to your real public URLs.
+The Console calls its API through same-origin `/api` paths, so remove any old
+`CONSOLE_API_URL` value from your production `.env`.
 
 ### 5. Review registry config
 
@@ -159,7 +169,7 @@ nothing to edit in the YAML itself. If you use different variable names, keep
 ### 6. Deploy
 
 ```bash
-docker compose up -d --build
+docker compose up -d --build --remove-orphans
 ```
 
 ## Directory Structure

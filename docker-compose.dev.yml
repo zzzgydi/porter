@@ -58,7 +58,10 @@ services:
 
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
+      args:
+        VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL:-http://localhost:5000}
     container_name: registry-api
     restart: unless-stopped
     ports:
@@ -76,7 +79,9 @@ services:
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/secrets/auth.key
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       API_JWT_SECRET: ${API_JWT_SECRET}
-      CONSOLE_ORIGIN: ${CONSOLE_ORIGIN:-http://localhost:4173}
+      # Development keeps the Console in its own container on :4173.
+      CONSOLE_ORIGIN: http://localhost:4173
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
@@ -101,7 +106,7 @@ services:
     build:
       context: ./console
       args:
-        VITE_API_BASE_URL: http://localhost:3000
+        VITE_API_BASE_URL: http://localhost:${API_PORT:-3000}
         VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL:-http://localhost:5000}
     container_name: registry-console
     restart: unless-stopped

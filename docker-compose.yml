@@ -64,7 +64,10 @@ services:
 
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
+      args:
+        VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL}
     container_name: registry-api
     restart: unless-stopped
     ports:
@@ -82,7 +85,8 @@ services:
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/secrets/auth.key
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       API_JWT_SECRET: ${API_JWT_SECRET}
-      CONSOLE_ORIGIN: ${CONSOLE_ORIGIN:-http://localhost:4173}
+      CONSOLE_ORIGIN: ${CONSOLE_ORIGIN:-http://localhost:3000}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
@@ -101,19 +105,6 @@ services:
         condition: service_healthy
       registry:
         condition: service_started
-
-  console:
-    build:
-      context: ./console
-      args:
-        VITE_API_BASE_URL: ${CONSOLE_API_URL}
-        VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL}
-    container_name: registry-console
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:4173:4173"
-    depends_on:
-      - api
 
 volumes:
   postgres_data:

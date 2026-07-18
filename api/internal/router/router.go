@@ -1,8 +1,11 @@
 package router
 
 import (
+	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -66,6 +69,55 @@ func sessionRefresh(usersSvc *users.Service, sessionMgr *session.Manager) func(h
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// consoleHandler serves the Vite build bundled into the API image. Requests
+// for files that do not exist fall back to index.html so browser-side routes
+// (for example /projects/demo) continue to work after a page refresh.
+func consoleHandler(staticDir string) http.Handler {
+	files, err := os.Stat(staticDir)
+	if err != nil || !files.IsDir() {
+		return nil
+	}
+
+	fileSystem := os.DirFS(staticDir)
+	fileServer := http.FileServer(http.FS(fileSystem))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Never turn an unknown API or internal endpoint into the SPA shell.
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") ||
+			r.URL.Path == "/internal" || strings.HasPrefix(r.URL.Path, "/internal/") {
+			http.NotFound(w, r)
+			return
+		}
+
+		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if name != "." && fs.ValidPath(name) {
+			if info, err := fs.Stat(fileSystem, name); err == nil && !info.IsDir() {
+				if strings.HasPrefix(name, "assets/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache")
+				}
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// index.html must be revalidated so a newly deployed asset manifest is
+		// picked up immediately.
+		w.Header().Set("Cache-Control", "no-cache")
+		fallback := r.Clone(r.Context())
+		// FileServer redirects an explicit /index.html request. Serving the
+		// root makes it select index.html without that extra redirect.
+		fallback.URL.Path = "/"
+		fileServer.ServeHTTP(w, fallback)
+	})
 }
 
 func New(deps Deps) http.Handler {
@@ -162,6 +214,13 @@ func New(deps Deps) http.Handler {
 	// Internal: Registry webhook
 	eventsH := registry.NewEventHandler(deps.Redis, deps.RepoSvc, deps.ManifestSvc, deps.TagSvc, deps.AuditSvc, deps.Config.WebhookSecret, deps.Logger)
 	r.Post("/internal/registry/events", eventsH.ServeHTTP)
+
+	// In the production image the console build is copied to this directory.
+	// Keeping it optional lets `go run` continue to work without a prior web
+	// build, while Docker deployments get a single API + console container.
+	if console := consoleHandler("/app/console"); console != nil {
+		r.NotFound(console.ServeHTTP)
+	}
 
 	return r
 }
