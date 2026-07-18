@@ -41,8 +41,8 @@ Docker CLI / CI / CD
 bash scripts/generate-auth-cert.sh
 ```
 
-这会创建 `registry/certs/auth.key` 和 `registry/certs/auth.crt`。
-API 服务启动时会自动生成 `jwks.json`。
+这会创建 `registry/certs/auth.key`、`registry/certs/auth.crt` 和 `registry/certs/jwks.json`。
+如果 `jwks.json` 缺失，API 服务启动时会根据 `auth.crt` 自动生成。
 
 ### 2. 准备环境变量
 
@@ -82,9 +82,9 @@ curl -I http://localhost:5000/v2/
 
 1. 进入 **Projects** -> **New Project** -> 名称：`demo`
 2. 进入 **Robot Tokens** -> **New Token**
-   - Project Name: `demo`
+   - Project: `demo`
    - Token Name: `ci`
-   - Permissions: `pull,push`
+   - Permissions: 勾选 `pull` 和 `push`
 3. 复制令牌（仅显示一次）
 
 ### 7. Docker 登录与推送/拉取
@@ -149,11 +149,11 @@ cp .env.example .env
 编辑 `.env`，将所有 `change_me_*` 替换为强密码。
 将 `REGISTRY_PUBLIC_URL` 和 `CONSOLE_API_URL` 设置为你的真实公网地址。
 
-### 5. 更新 Registry 配置
+### 5. 检查 Registry 配置
 
-编辑 `registry/config.yml`（生产配置）：
-- 将 `YOUR_R2_*` 占位符替换为真实值
-- 确保 `auth.token.realm` 指向你的公网 API 令牌端点
+`registry/config.yml` 是模板文件，容器启动时通过 `envsubst` 渲染——所有取值
+（R2 凭证、域名、密钥）都来自 `.env`，无需手动编辑 YAML。如果你修改了变量名，
+请确保 `auth.token.realm` 指向你的公网 API 令牌端点。
 
 ### 6. 部署
 
@@ -194,7 +194,7 @@ docker compose -f docker-compose.yml up -d --build
 - **Registry:3.1.0**：使用 `/etc/distribution/config.yml`（v3 路径）。
 - **存储**：生产环境使用 R2 S3 兼容 API；开发环境使用文件系统。
 - **认证**：Go API 服务为 Registry 颁发 RS256 JWT；控制台使用 HMAC Session Cookie。
-- **机器人令牌**：用户名格式 `robot$<project>-<name>`。密码为 32 字节随机十六进制字符串，数据库中存储 SHA-256 哈希值。创建时仅显示一次。
+- **机器人令牌**：用户名格式 `robot$<project>-<name>`。密码为 32 字节随机十六进制字符串，数据库中存储 bcrypt 哈希（旧的 SHA-256 哈希仍可验证）。创建时仅显示一次。权限严格限定在所属项目内。
 - **Webhook**：Registry 推送事件到 Go API 服务，API 将项目/仓库/标签信息写入 Postgres。
 - **删除标签**：控制台触发 Registry 清单删除 + Postgres 软删除。
 - **GC**：MVP 阶段仅支持手动清理。参考 `scripts/gc.sh`。

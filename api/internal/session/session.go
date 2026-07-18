@@ -1,6 +1,8 @@
 package session
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -76,7 +78,27 @@ func (sm *Manager) Cookie(token string, secure bool, ttl time.Duration) *http.Co
 	}
 }
 
+// ErrSessionInvalid is returned when a session was present but is no longer
+// valid (e.g. the user was deleted after the token was issued).
+var ErrSessionInvalid = errors.New("session invalid")
+
+type claimsContextKey struct{}
+
+// ContextWithClaims stores pre-validated claims on the context, allowing
+// middleware to inject claims refreshed from the database. Storing a nil
+// Claims pointer marks the session as invalid.
+func ContextWithClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, claimsContextKey{}, claims)
+}
+
 func FromRequest(sm *Manager, r *http.Request) (*Claims, error) {
+	// Middleware may have already validated and refreshed the claims.
+	if claims, ok := r.Context().Value(claimsContextKey{}).(*Claims); ok {
+		if claims == nil {
+			return nil, ErrSessionInvalid
+		}
+		return claims, nil
+	}
 	cookie, err := r.Cookie("session")
 	if err != nil {
 		return nil, err

@@ -38,10 +38,17 @@ export const router = createBrowserRouter([
       { path: "projects/:project", element: <ProjectDetailPage /> },
       { path: "projects/:project/members", element: <ProjectMembersPage /> },
       {
-        path: "projects/:project/repositories/:repo",
+        path: "projects/:project/repositories/*",
         element: <RepositoryDetailPage />,
       },
-      { path: "robot-tokens", element: <RobotTokensPage /> },
+      {
+        path: "robot-tokens",
+        element: (
+          <RequireAdmin>
+            <RobotTokensPage />
+          </RequireAdmin>
+        ),
+      },
       {
         path: "users",
         element: (

@@ -1,12 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Settings as SettingsIcon, Info, Server, Database, Shield, Container } from 'lucide-react'
-
-const REGISTRY_HOST = import.meta.env.VITE_REGISTRY_PUBLIC_URL || `http://${window.location.host}`
+import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/toast'
+import { REGISTRY_HOST } from '@/lib/registry'
+import { Settings as SettingsIcon, Info, Server, Database, Shield, Container, Copy } from 'lucide-react'
 
 export function SettingsPage() {
-  const registryHost = REGISTRY_HOST.replace(/^https?:\/\//, '')
+  const { success } = useToast()
+
+  function copyLogin() {
+    navigator.clipboard.writeText(`docker login ${REGISTRY_HOST}`)
+    success('Login command copied to clipboard')
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -51,9 +58,14 @@ export function SettingsPage() {
         <CardContent className="space-y-4 text-sm">
           <div className="space-y-2">
             <p className="text-muted-foreground">Use the following command to log in:</p>
-            <code className="block rounded-lg border bg-muted/50 p-3 font-mono text-xs">
-              docker login {registryHost}
-            </code>
+            <div className="flex items-center gap-2">
+              <code className="block flex-1 rounded-lg border bg-muted/50 p-3 font-mono text-xs">
+                docker login {REGISTRY_HOST}
+              </code>
+              <Button variant="ghost" size="icon" onClick={copyLogin} title="Copy docker login">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <Separator />
           <div className="space-y-2">

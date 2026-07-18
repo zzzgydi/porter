@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/empty-state'
+import { ErrorState } from '@/components/error-state'
 import { FolderKanban, Plus, Globe, Lock } from 'lucide-react'
 import { TableSkeleton } from '@/components/ui/table-skeleton'
 import { useToast } from '@/components/ui/toast'
@@ -22,7 +23,7 @@ export function ProjectsPage() {
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
 
-  const { data, isLoading } = useQuery({ queryKey: ['projects'], queryFn: api.projects.list })
+  const { data, isLoading, isError, error: queryError } = useQuery({ queryKey: ['projects'], queryFn: api.projects.list })
 
   const create = useMutation({
     mutationFn: api.projects.create,
@@ -40,6 +41,12 @@ export function ProjectsPage() {
     },
   })
 
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name) return
+    create.mutate({ name, display_name: displayName, visibility: 'private' })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,23 +63,25 @@ export function ProjectsPage() {
               <DialogTitle>New Project</DialogTitle>
               <DialogDescription>Create a new project to group repositories.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="project-name">Name</Label>
-                <Input id="project-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. demo" />
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="project-name">Name</Label>
+                  <Input id="project-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. demo" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-display">Display Name</Label>
+                  <Input id="project-display" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Demo Project" />
+                </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-display">Display Name</Label>
-                <Input id="project-display" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Demo Project" />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={() => create.mutate({ name, display_name: displayName, visibility: 'private' })} disabled={!name || create.isPending} loading={create.isPending}>
-                Create
-              </Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={!name || create.isPending} loading={create.isPending}>
+                  Create
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -84,6 +93,10 @@ export function ProjectsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <TableSkeleton columns={3} rows={3} />
+          ) : isError ? (
+            <div className="p-6">
+              <ErrorState message={queryError?.message} className="border-0 bg-transparent" />
+            </div>
           ) : data?.length === 0 ? (
             <div className="p-6">
               <EmptyState

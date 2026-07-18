@@ -22,15 +22,15 @@ func NewHandler(service *Service, projectsSvc *projects.Service, membersSvc *mem
 	return &Handler{service: service, projectsSvc: projectsSvc, membersSvc: membersSvc, sessionMgr: sessionMgr}
 }
 
-func (h *Handler) Routes(r chi.Router) {
-	r.Get("/", h.ListByProject)
-}
-
 func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
 	return authz.RequireMember(h.membersSvc.Repo(), h.sessionMgr, r, projectID)
 }
 
 func (h *Handler) ListByProject(w http.ResponseWriter, r *http.Request) {
+	if _, err := authz.RequireSession(h.sessionMgr, r); err != nil {
+		httpx.JSONError(w, err)
+		return
+	}
 	name := chi.URLParam(r, "project")
 	p, err := h.projectsSvc.GetByName(r.Context(), name)
 	if err != nil {
@@ -49,21 +49,21 @@ func (h *Handler) ListByProject(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, list)
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+// Get handles GET /api/projects/{project}/repositories/* where the wildcard
+// is the (possibly nested) repository name.
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request, repoName string) {
+	if _, err := authz.RequireSession(h.sessionMgr, r); err != nil {
+		httpx.JSONError(w, err)
+		return
+	}
 	project := chi.URLParam(r, "project")
-	repo := chi.URLParam(r, "repo")
-	fullName := project + "/" + repo
+	fullName := project + "/" + repoName
 	repository, err := h.service.GetByFullName(r.Context(), fullName)
 	if err != nil {
 		httpx.JSONError(w, httpx.NotFound("repository not found"))
 		return
 	}
-	p, err := h.projectsSvc.GetByID(r.Context(), repository.ProjectID)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
-		return
-	}
-	if _, err := h.requireProjectMember(r, p.ID); err != nil {
+	if _, err := h.requireProjectMember(r, repository.ProjectID); err != nil {
 		httpx.JSONError(w, err)
 		return
 	}

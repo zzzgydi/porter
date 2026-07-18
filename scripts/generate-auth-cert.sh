@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Generates the RSA keypair used to sign registry tokens, plus the JWKS the
+# registry uses to verify them. Requires: openssl, python3.
+#
+# Existing files are never overwritten unless FORCE=1 is set — rotating the
+# key invalidates all tokens and requires a registry restart.
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CERT_DIR="${SCRIPT_DIR}/../registry/certs"
 mkdir -p "$CERT_DIR"
+
+if [ "${FORCE:-0}" != "1" ] && [ -f "${CERT_DIR}/auth.key" ] && [ -f "${CERT_DIR}/auth.crt" ] && [ -f "${CERT_DIR}/jwks.json" ]; then
+  echo "Certs already exist in ${CERT_DIR} (set FORCE=1 to regenerate). Nothing to do."
+  exit 0
+fi
 
 openssl req -newkey rsa:2048 -nodes -sha256 \
   -keyout "${CERT_DIR}/auth.key" \
@@ -36,7 +47,8 @@ n = base64.urlsafe_b64encode(bytes.fromhex(hex_n)).rstrip(b'=').decode()
 exp_match = re.search(r'Exponent: (\d+)', text)
 e_int = int(exp_match.group(1))
 e = base64.urlsafe_b64encode(e_int.to_bytes((e_int.bit_length() + 7) // 8, 'big')).rstrip(b'=').decode()
-jwk_json = json.dumps({'e': e, 'kty': 'RSA', 'n': n}, sort_keys=True).encode()
+# RFC 7638 thumbprint must use compact JSON (no whitespace) to match the signer.
+jwk_json = json.dumps({'e': e, 'kty': 'RSA', 'n': n}, sort_keys=True, separators=(',', ':')).encode()
 kid = base64.urlsafe_b64encode(hashlib.sha256(jwk_json).digest()).rstrip(b'=').decode()
 jwks = {'keys': [{'kty': 'RSA', 'kid': kid, 'use': 'sig', 'alg': 'RS256', 'n': n, 'e': e}]}
 with open(out_path, 'w') as f:

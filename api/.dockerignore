@@ -1,0 +1,6 @@
+# Keep build contexts small and deterministic
+server
+bin/
+vendor/
+*.test
+*.out

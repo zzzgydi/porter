@@ -108,7 +108,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		}
 		var allowed []string
 		if isRobot {
-			allowed = h.robotsSvc.ResolveProjectScope(robot, parsed.Type, parsed.Name, parsed.Actions)
+			allowed = h.robotsSvc.ResolveProjectScope(r.Context(), robot, parsed.Type, parsed.Name, parsed.Actions)
 		} else {
 			allowed = h.resolveUserScope(r.Context(), userID, userRole, parsed.Type, parsed.Name, parsed.Actions)
 		}
@@ -153,6 +153,16 @@ func (h *Handler) resolveUserScope(ctx context.Context, userID, userRole, scopeT
 
 	role, err := h.membersRepo.GetRole(ctx, p.ID, userID)
 	if err != nil {
+		// Public projects grant pull access to any authenticated user.
+		if p.Visibility == "public" {
+			var result []string
+			for _, a := range requested {
+				if a == "pull" {
+					result = append(result, a)
+				}
+			}
+			return result
+		}
 		return nil
 	}
 

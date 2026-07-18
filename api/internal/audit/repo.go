@@ -2,21 +2,22 @@ package audit
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zzzgydi/porter/api/internal/db"
 )
 
 type Log struct {
-	ID        string `json:"id"`
-	ActorType string `json:"actor_type"`
-	ActorID   string `json:"actor_id"`
-	Action    string `json:"action"`
-	Target    string `json:"target"`
-	Metadata  []byte `json:"metadata,omitempty"`
-	IP        string `json:"ip"`
-	UserAgent string `json:"user_agent"`
-	CreatedAt db.TimeString `json:"created_at"`
+	ID        string          `json:"id"`
+	ActorType string          `json:"actor_type"`
+	ActorID   string          `json:"actor_id"`
+	Action    string          `json:"action"`
+	Target    string          `json:"target"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	IP        string          `json:"ip"`
+	UserAgent string          `json:"user_agent"`
+	CreatedAt db.TimeString   `json:"created_at"`
 }
 
 type Repo struct {

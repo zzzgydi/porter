@@ -68,9 +68,9 @@ services:
     container_name: registry-api
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${API_PORT:-3000}:3000"
     environment:
-      API_PORT: ${API_PORT}
+      API_PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -91,6 +91,9 @@ services:
       R2_BUCKET_NAME: ${R2_BUCKET_NAME}
     volumes:
       - ./registry/certs/auth.key:/run/secrets/auth.key:ro
+      # Mounted so the API can generate jwks.json from auth.crt on startup
+      # when scripts/generate-auth-cert.sh was not run first.
+      - ./registry/certs:/certs
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,9 +112,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:4173:4173"
-    environment:
-      VITE_API_BASE_URL: ${CONSOLE_API_URL}
-      VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL}
     depends_on:
       - api
 

@@ -8,11 +8,11 @@ import (
 )
 
 type Repository struct {
-	ID          string `json:"id"`
-	ProjectID   string `json:"project_id"`
-	Name        string `json:"name"`
-	FullName    string `json:"full_name"`
-	Description string `json:"description"`
+	ID          string        `json:"id"`
+	ProjectID   string        `json:"project_id"`
+	Name        string        `json:"name"`
+	FullName    string        `json:"full_name"`
+	Description string        `json:"description"`
 	CreatedAt   db.TimeString `json:"created_at"`
 	UpdatedAt   db.TimeString `json:"updated_at"`
 }

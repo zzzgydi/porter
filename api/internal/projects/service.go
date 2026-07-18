@@ -56,12 +56,16 @@ func (s *Service) ListByUser(ctx context.Context, userID string) ([]Project, err
 	return s.repo.ListByUser(ctx, userID)
 }
 
-func (s *Service) Update(ctx context.Context, id, displayName, visibility string) error {
+// Update changes a project's mutable fields. displayName == nil leaves the
+// current value untouched; visibility == "" leaves it untouched.
+func (s *Service) Update(ctx context.Context, id string, displayName *string, visibility string) error {
 	p, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	p.DisplayName = displayName
+	if displayName != nil {
+		p.DisplayName = *displayName
+	}
 	if visibility != "" {
 		p.Visibility = visibility
 	}

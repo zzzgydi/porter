@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
+import { ErrorState } from '@/components/error-state'
 import { TableSkeleton } from '@/components/ui/table-skeleton'
 import { ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export function AuditLogsPage() {
   const [offset, setOffset] = useState(0)
   const limit = 50
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['audit', offset],
     queryFn: () => api.audit.list(limit, offset),
   })
@@ -32,6 +33,10 @@ export function AuditLogsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <TableSkeleton columns={5} rows={5} />
+          ) : isError ? (
+            <div className="p-6">
+              <ErrorState message={error?.message} className="border-0 bg-transparent" />
+            </div>
           ) : data?.length === 0 ? (
             <div className="p-6">
               <EmptyState title="No logs" description="Audit events will appear here." className="border-0 bg-transparent" />

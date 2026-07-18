@@ -16,7 +16,7 @@ import { useState } from 'react'
 const nav = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
-  { name: 'Robot Tokens', href: '/robot-tokens', icon: KeyRound },
+  { name: 'Robot Tokens', href: '/robot-tokens', icon: KeyRound, adminOnly: true },
   { name: 'Users', href: '/users', icon: Users, adminOnly: true },
   { name: 'Audit Logs', href: '/audit-logs', icon: ClipboardList, adminOnly: true },
   { name: 'Settings', href: '/settings', icon: Settings },

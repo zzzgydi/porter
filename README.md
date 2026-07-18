@@ -41,8 +41,8 @@ Docker CLI / CI / CD
 bash scripts/generate-auth-cert.sh
 ```
 
-This creates `registry/certs/auth.key` and `registry/certs/auth.crt`.
-The API server will auto-generate `jwks.json` on startup.
+This creates `registry/certs/auth.key`, `registry/certs/auth.crt`, and `registry/certs/jwks.json`.
+If `jwks.json` is missing, the API server generates it from `auth.crt` on startup.
 
 ### 2. Prepare environment
 
@@ -82,9 +82,9 @@ Default admin credentials (from `.env`):
 
 1. Go to **Projects** -> **New Project** -> name: `demo`
 2. Go to **Robot Tokens** -> **New Token**
-   - Project Name: `demo`
+   - Project: `demo`
    - Token Name: `ci`
-   - Permissions: `pull,push`
+   - Permissions: check `pull` and `push`
 3. Copy the token (shown only once).
 
 ### 7. Docker login & push/pull
@@ -149,11 +149,12 @@ cp .env.example .env
 Edit `.env` and replace all `change_me_*` placeholders with strong secrets.
 Set `REGISTRY_PUBLIC_URL` and `CONSOLE_API_URL` to your real public URLs.
 
-### 5. Update registry config
+### 5. Review registry config
 
-Edit `registry/config.yml` (production config):
-- Replace `YOUR_R2_*` placeholders with real values.
-- Ensure `auth.token.realm` points to your public API token endpoint.
+`registry/config.yml` is a template rendered at container startup via `envsubst`
+— all values (R2 credentials, domains, secrets) come from `.env`, so there is
+nothing to edit in the YAML itself. If you use different variable names, keep
+`auth.token.realm` pointing to your public API token endpoint.
 
 ### 6. Deploy
 
@@ -194,7 +195,7 @@ docker compose up -d --build
 - **Registry:3.1.0**: Uses `/etc/distribution/config.yml` (v3 path).
 - **Storage**: Production uses R2 S3-compatible API; dev uses filesystem.
 - **Auth**: Go API Server issues RS256 JWTs for registry token auth. Console uses HMAC session cookies.
-- **Robot Tokens**: Username format `robot$<project>-<name>`. Password is a 32-byte random hex string, SHA-256 hashed in DB. Only shown once on creation.
+- **Robot Tokens**: Username format `robot$<project>-<name>`. Password is a 32-byte random hex string, bcrypt-hashed in DB (legacy SHA-256 hashes still verify). Only shown once on creation. Scoped strictly to their own project.
 - **Webhook**: Registry pushes events to Go API Server, which upserts projects/repositories/tags into Postgres.
 - **Delete tag**: Console triggers registry manifest delete + Postgres soft delete.
 - **GC**: Manual only in MVP. Use `scripts/gc.sh` as a guide.

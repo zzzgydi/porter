@@ -2,15 +2,16 @@ package manifests
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Manifest struct {
-	Digest      string `json:"digest"`
-	MediaType   string `json:"media_type"`
-	SizeBytes   int64  `json:"size_bytes"`
-	ContentJSON []byte `json:"content_json,omitempty"`
+	Digest      string          `json:"digest"`
+	MediaType   string          `json:"media_type"`
+	SizeBytes   int64           `json:"size_bytes"`
+	ContentJSON json.RawMessage `json:"content_json,omitempty"`
 }
 
 type Repo struct {

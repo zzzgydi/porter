@@ -22,10 +22,10 @@ type EventPayload struct {
 }
 
 type Event struct {
-	ID        string      `json:"id"`
-	Timestamp string      `json:"timestamp"`
-	Action    string      `json:"action"`
-	Target    EventTarget `json:"target"`
+	ID        string       `json:"id"`
+	Timestamp string       `json:"timestamp"`
+	Action    string       `json:"action"`
+	Target    EventTarget  `json:"target"`
 	Request   EventRequest `json:"request"`
 }
 
@@ -78,12 +78,20 @@ func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	failed := 0
 	for _, ev := range payload.Events {
 		if err := h.handleEvent(r.Context(), ev); err != nil {
+			failed++
 			h.logger.Warn("webhook event failed", "event_id", ev.ID, "action", ev.Action, "error", err)
 		}
 	}
 
+	if failed > 0 {
+		// Signal failure so the registry retries with backoff instead of
+		// silently losing the events.
+		http.Error(w, "event processing failed", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -96,6 +104,16 @@ func (h *EventHandler) handleEvent(ctx context.Context, ev Event) error {
 		return nil // duplicate
 	}
 
+	if err := h.processEvent(ctx, ev); err != nil {
+		// Processing failed: drop the dedup marker so a retry (registry
+		// backoff or manual replay) is not suppressed.
+		h.redis.UnmarkWebhookEvent(ctx, ev.ID)
+		return err
+	}
+	return nil
+}
+
+func (h *EventHandler) processEvent(ctx context.Context, ev Event) error {
 	parts := strings.SplitN(ev.Target.Repository, "/", 2)
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid repository name: %s", ev.Target.Repository)

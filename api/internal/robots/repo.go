@@ -2,21 +2,22 @@ package robots
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zzzgydi/porter/api/internal/db"
 )
 
 type RobotToken struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Username    string `json:"username"`
-	TokenHash   string `json:"-"`
-	ProjectID   string `json:"project_id,omitempty"`
-	Permissions []byte `json:"permissions"`
-	ExpiresAt   db.TimeString `json:"expires_at,omitempty"`
-	CreatedAt   db.TimeString `json:"created_at"`
-	RevokedAt   db.TimeString `json:"revoked_at,omitempty"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Username    string          `json:"username"`
+	TokenHash   string          `json:"-"`
+	ProjectID   string          `json:"project_id,omitempty"`
+	Permissions json.RawMessage `json:"permissions"`
+	ExpiresAt   db.TimeString   `json:"expires_at,omitempty"`
+	CreatedAt   db.TimeString   `json:"created_at"`
+	RevokedAt   db.TimeString   `json:"revoked_at,omitempty"`
 }
 
 type Repo struct {

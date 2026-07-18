@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { REGISTRY_HOST } from '@/lib/registry'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -12,20 +13,19 @@ import { useToast } from '@/components/ui/toast'
 import { Copy, Trash2, Container, ArrowLeft, FolderKanban } from 'lucide-react'
 
 export function RepositoryDetailPage() {
-  const { project, repo } = useParams<{ project: string; repo: string }>()
+  const params = useParams<{ project: string; '*': string }>()
+  const project = params.project ?? ''
+  const repo = params['*'] ?? ''
   const [deleteTag, setDeleteTag] = useState<string | null>(null)
   const [error, setError] = useState('')
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
 
-  if (!project || !repo) {
-    return <div className="p-6 text-destructive">Repository not found</div>
-  }
-
+  const hasParams = !!project && !!repo
   const fullName = `${project}/${repo}`
 
-  const { data: repository, isLoading: repoLoading } = useQuery({ queryKey: ['repository', project, repo], queryFn: () => api.repositories.get(project, repo) })
-  const { data: tags, isLoading } = useQuery({ queryKey: ['tags', project, repo], queryFn: () => api.tags.list(project, repo) })
+  const { data: repository, isLoading: repoLoading } = useQuery({ queryKey: ['repository', project, repo], queryFn: () => api.repositories.get(project, repo), enabled: hasParams })
+  const { data: tags, isLoading } = useQuery({ queryKey: ['tags', project, repo], queryFn: () => api.tags.list(project, repo), enabled: hasParams })
 
   const del = useMutation({
     mutationFn: (tag: string) => api.tags.delete(project, repo, tag),
@@ -42,7 +42,7 @@ export function RepositoryDetailPage() {
   })
 
   function copyPull(tag: string) {
-    const cmd = `docker pull ${window.location.host}/${fullName}:${tag}`
+    const cmd = `docker pull ${REGISTRY_HOST}/${fullName}:${tag}`
     navigator.clipboard.writeText(cmd)
     success('Pull command copied to clipboard')
   }
@@ -56,6 +56,10 @@ export function RepositoryDetailPage() {
   }
 
   const loading = repoLoading || isLoading
+
+  if (!hasParams) {
+    return <div className="p-6 text-destructive">Repository not found</div>
+  }
 
   return (
     <div className="space-y-6">

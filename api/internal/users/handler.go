@@ -2,6 +2,7 @@ package users
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/mail"
 
@@ -43,7 +44,7 @@ func (h *Handler) Routes(r chi.Router) {
 func (h *Handler) requireAdmin(r *http.Request) error {
 	claims, err := session.FromRequest(h.sessionMgr, r)
 	if err != nil {
-		return err
+		return httpx.Unauthorized("session required")
 	}
 	if claims.Role != "platform_admin" {
 		return httpx.Forbidden("admin required")
@@ -99,7 +100,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := h.service.Create(r.Context(), req.Email, req.Name, req.Password, req.Role)
 	if err != nil {
-		httpx.JSONError(w, httpx.BadRequest(err.Error()))
+		httpx.JSONError(w, httpx.Conflict("email already exists"))
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, u)
@@ -112,15 +113,24 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 	var req struct {
-		Name string `json:"name"`
-		Role string `json:"role"`
+		Name *string `json:"name"`
+		Role string  `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.JSONError(w, httpx.BadRequest("invalid body"))
 		return
 	}
 	if err := h.service.Update(r.Context(), id, req.Name, req.Role); err != nil {
-		httpx.JSONError(w, httpx.Internal("update failed"))
+		switch {
+		case errors.Is(err, ErrLastAdmin):
+			httpx.JSONError(w, httpx.BadRequest("cannot demote the last admin"))
+		case errors.Is(err, ErrUserNotFound):
+			httpx.JSONError(w, httpx.NotFound("user not found"))
+		case errors.Is(err, ErrInvalidRole):
+			httpx.JSONError(w, httpx.BadRequest("invalid role"))
+		default:
+			httpx.JSONError(w, httpx.Internal("update failed"))
+		}
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})

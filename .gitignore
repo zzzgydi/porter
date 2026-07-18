@@ -20,11 +20,15 @@ redis_dev_data/
 # Go
 api/bin/
 api/vendor/
+api/server
 api/*.exe
 api/*.test
 api/*.out
 go.work
 go.work.sum
+
+# Backups
+backups/
 
 # Node / Vite / React
 console/node_modules/

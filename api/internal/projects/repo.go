@@ -8,10 +8,10 @@ import (
 )
 
 type Project struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Visibility  string `json:"visibility"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	DisplayName string        `json:"display_name"`
+	Visibility  string        `json:"visibility"`
 	CreatedAt   db.TimeString `json:"created_at"`
 	UpdatedAt   db.TimeString `json:"updated_at"`
 }

@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/zzzgydi/porter/api/internal/auth"
 	"github.com/zzzgydi/porter/api/internal/projects"
 )
+
+var robotNameRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
+var validActions = map[string]bool{"pull": true, "push": true, "delete": true}
 
 type Service struct {
 	repo        *Repo
@@ -20,10 +25,41 @@ func NewService(repo *Repo, projectsSvc *projects.Service) *Service {
 	return &Service{repo: repo, projectsSvc: projectsSvc}
 }
 
+// validatePermissions ensures a robot token can only hold permissions on its
+// own project, and only known registry actions.
+func validatePermissions(projectName string, perms map[string][]string) error {
+	if len(perms) == 0 {
+		return fmt.Errorf("permissions are required")
+	}
+	wantKey := projectName + "/*"
+	for key, actions := range perms {
+		if key != wantKey {
+			return fmt.Errorf("invalid permission scope %q: only %q is allowed", key, wantKey)
+		}
+		if len(actions) == 0 {
+			return fmt.Errorf("permission scope %q must grant at least one action", key)
+		}
+		for _, a := range actions {
+			if !validActions[a] {
+				return fmt.Errorf("invalid action %q: allowed actions are pull, push, delete", a)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Service) Create(ctx context.Context, projectID, name string, perms map[string][]string) (*RobotToken, string, error) {
 	p, err := s.projectsSvc.GetByID(ctx, projectID)
 	if err != nil {
-		return nil, "", fmt.Errorf("project not found: %w", err)
+		return nil, "", fmt.Errorf("project not found")
+	}
+
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" || len(name) > 32 || !robotNameRe.MatchString(name) {
+		return nil, "", fmt.Errorf("robot name must be 1-32 characters of lowercase letters, numbers, hyphens and underscores")
+	}
+	if err := validatePermissions(p.Name, perms); err != nil {
+		return nil, "", err
 	}
 
 	tokenRaw, err := auth.GenerateRandomToken(32)
@@ -39,14 +75,14 @@ func (s *Service) Create(ctx context.Context, projectID, name string, perms map[
 		return nil, "", fmt.Errorf("hash robot token failed")
 	}
 	t := &RobotToken{
-		Name:      name,
-		Username:  username,
-		TokenHash: tokenHash,
-		ProjectID: projectID,
+		Name:        name,
+		Username:    username,
+		TokenHash:   tokenHash,
+		ProjectID:   projectID,
 		Permissions: permsJSON,
 	}
 	if err := s.repo.Create(ctx, t); err != nil {
-		return nil, "", fmt.Errorf("create robot token: %w", err)
+		return nil, "", fmt.Errorf("create robot token failed (name may already exist)")
 	}
 	return t, tokenRaw, nil
 }
@@ -61,7 +97,11 @@ func (s *Service) GetByUsername(ctx context.Context, username string) (*RobotTok
 	}
 	if t.ExpiresAt != "" {
 		exp, err := time.Parse(time.RFC3339, string(t.ExpiresAt))
-		if err == nil && time.Now().After(exp) {
+		if err != nil {
+			// Fail closed: an unreadable expiry must not grant access.
+			return nil, fmt.Errorf("token expiry invalid")
+		}
+		if time.Now().After(exp) {
 			return nil, fmt.Errorf("token expired")
 		}
 	}
@@ -96,13 +136,18 @@ func (s *Service) Revoke(ctx context.Context, id string) error {
 }
 
 // ResolveProjectScope returns granted actions for a robot token against a scope.
-func (s *Service) ResolveProjectScope(t *RobotToken, scopeType, name string, requested []string) []string {
+// The token can only ever access repositories inside its own project.
+func (s *Service) ResolveProjectScope(ctx context.Context, t *RobotToken, scopeType, name string, requested []string) []string {
 	if scopeType != "repository" {
 		return nil
 	}
 	// name format: project/repo
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) != 2 {
+		return nil
+	}
+	p, err := s.projectsSvc.GetByID(ctx, t.ProjectID)
+	if err != nil || p.Name != parts[0] {
 		return nil
 	}
 	var perms map[string][]string
@@ -114,7 +159,9 @@ func (s *Service) ResolveProjectScope(t *RobotToken, scopeType, name string, req
 	}
 	grantedSet := make(map[string]struct{})
 	for _, a := range granted {
-		grantedSet[a] = struct{}{}
+		if validActions[a] {
+			grantedSet[a] = struct{}{}
+		}
 	}
 	var result []string
 	for _, a := range requested {

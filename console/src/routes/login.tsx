@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { api, APIError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,17 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const from = (location.state as { from?: { pathname?: string } } | null)
+    ?.from?.pathname;
+  const dest =
+    from && from.startsWith("/") && !from.startsWith("//")
+      ? from
+      : "/dashboard";
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={dest} replace />;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -33,7 +41,7 @@ export function LoginPage() {
     try {
       const data = await api.login(email, password);
       setUser(data);
-      navigate("/dashboard");
+      navigate(dest, { replace: true });
     } catch (err) {
       if (err instanceof APIError) {
         if (err.status === 401) {

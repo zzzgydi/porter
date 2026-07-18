@@ -94,20 +94,27 @@ Handlers write responses via `httpx.JSON` in `api/internal/httpx/errors.go`. The
 - **Global:** `platform_admin` (full access), `user` (regular user)
 - **Project-level:** `owner`, `developer`, `guest`
 - Project permissions are checked via `api/internal/authz/authz.go` (`RequireMember`, `RequireRole`).
-- The registry token endpoint intersects requested scope actions with the user's actual grants (e.g., a `guest` only gets `pull`).
+- The registry token endpoint intersects requested scope actions with the user's actual grants (e.g., a `guest` only gets `pull`). Any authenticated user gets `pull` on repositories of `public` projects.
+- Robot tokens are strictly scoped to their own project: creation validates that permission keys are exactly `<project>/*` (actions ⊆ `pull/push/delete`), and token issuance re-checks the scope's project against the token's project.
+- Repository names may contain slashes (`team/app`). Console API routes use a wildcard: `GET/DELETE /api/projects/{project}/repositories/*` with the tail dispatched as `{repo}`, `{repo}/tags`, or `{repo}/tags/{tag}` (see `api/internal/router/router.go`).
 
 ### Webhook Event Processing
 
 The registry pushes push/delete events to `POST /internal/registry/events` (authenticated with `WEBHOOK_SECRET`). The API:
 
-1. Deduplicates via Redis (`MarkWebhookEvent`, 24h TTL).
+1. Deduplicates via Redis (`MarkWebhookEvent`, 24h TTL). The marker is removed again if processing fails, so retries are not suppressed.
 2. Ensures the project/repository exists in Postgres.
 3. Upserts manifests and tags on push, or soft-deletes tags on delete.
 4. Logs audit events asynchronously.
+5. Returns `500` when any event fails, so the registry retries with its configured threshold/backoff instead of losing events.
 
 ### Async Audit Logging
 
-`api/internal/audit/service.go` uses a buffered channel (capacity 1000) with a background worker goroutine. If the queue is full, events are dropped (logged as warnings). This prevents audit I/O from blocking request handlers.
+`api/internal/audit/service.go` uses a buffered channel (capacity 1000) with a background worker goroutine. If the queue is full, events are dropped (logged as warnings). This prevents audit I/O from blocking request handlers. On server shutdown the queue is closed and drained (`Service.Shutdown`) after `srv.Shutdown` completes.
+
+### Session Freshness
+
+`api/internal/router/router.go` installs a `sessionRefresh` middleware: on every request with a session cookie it reloads the user from Postgres and injects fresh claims (current role) into the request context via `session.ContextWithClaims`. Deleting or demoting a user therefore takes effect immediately rather than at the 7-day token expiry. `session.FromRequest` reads these injected claims first.
 
 ### Registry Config Templating
 
@@ -143,4 +150,4 @@ Shared packages:
 - **No linting config** (golangci-lint, eslint) is currently set up.
 - Environment variables are documented in `.env.example`. The API reads them via `api/internal/config/config.go`.
 - In dev mode (`DEV_MODE=true`), the API returns CORS headers for `http://localhost:4173` and uses lax cookie settings.
-- The `registry/certs/` directory contains `auth.key` (RSA private key for signing registry tokens) and `auth.crt` (public cert). The API auto-generates `jwks.json` from `auth.crt` on startup if it doesn't exist.
+- The `registry/certs/` directory contains `auth.key` (RSA private key for signing registry tokens) and `auth.crt` (public cert). `scripts/generate-auth-cert.sh` creates both plus `jwks.json` (skips existing files unless `FORCE=1`); both compose files also mount `./registry/certs` into the API container so it can generate `jwks.json` from `auth.crt` on startup if missing.

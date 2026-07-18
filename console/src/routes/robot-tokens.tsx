@@ -1,46 +1,52 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import type { RobotToken } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectItem } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/empty-state'
+import { ErrorState } from '@/components/error-state'
 import { TableSkeleton } from '@/components/ui/table-skeleton'
 import { useToast } from '@/components/ui/toast'
 import { KeyRound, Copy, Trash2, Plus, CheckCircle2 } from 'lucide-react'
 
+const ACTIONS = ['pull', 'push', 'delete']
+
 export function RobotTokensPage() {
   const [open, setOpen] = useState(false)
-  const [projectName, setProjectName] = useState('')
+  const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
-  const [perms, setPerms] = useState('pull,push')
+  const [actions, setActions] = useState<string[]>(['pull'])
   const [createdToken, setCreatedToken] = useState('')
+  const [revokeToken, setRevokeToken] = useState<RobotToken | null>(null)
   const [error, setError] = useState('')
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
 
-  const { data, isLoading } = useQuery({ queryKey: ['robots'], queryFn: () => api.robots.list() })
+  const { data, isLoading, isError, error: queryError } = useQuery({ queryKey: ['robots'], queryFn: () => api.robots.list() })
+  const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.projects.list })
 
   const create = useMutation({
-    mutationFn: async () => {
-      const projects = await api.projects.list()
-      const p = projects.find((x) => x.name === projectName)
-      if (!p) throw new Error('project not found')
+    mutationFn: () => {
+      const p = projects?.find((x) => x.id === projectId)
+      if (!p) return Promise.reject(new Error('project not found'))
       const permissions: Record<string, string[]> = {}
-      permissions[`${p.name}/*`] = perms.split(',').map((s) => s.trim())
+      permissions[`${p.name}/*`] = actions
       return api.robots.create({ project_id: p.id, name, permissions })
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['robots'] })
       setOpen(false)
       setCreatedToken(res.token || '')
-      setProjectName('')
+      setProjectId('')
       setName('')
-      setPerms('pull,push')
+      setActions(['pull'])
       setError('')
       success('Robot token created')
     },
@@ -54,10 +60,29 @@ export function RobotTokensPage() {
     mutationFn: (id: string) => api.robots.revoke(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['robots'] })
+      setRevokeToken(null)
+      setError('')
       success('Token revoked')
     },
-    onError: (err: Error) => showError(err.message),
+    onError: (err: Error) => {
+      setError(err.message)
+      showError(err.message)
+    },
   })
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!projectId || !name || actions.length === 0) return
+    create.mutate()
+  }
+
+  function toggleAction(a: string) {
+    setActions((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]))
+  }
+
+  function projectName(id: string) {
+    return projects?.find((p) => p.id === id)?.name || id.slice(0, 8)
+  }
 
   function copyToken() {
     navigator.clipboard.writeText(createdToken)
@@ -101,6 +126,10 @@ export function RobotTokensPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <TableSkeleton columns={5} rows={3} />
+          ) : isError ? (
+            <div className="p-6">
+              <ErrorState message={queryError?.message} className="border-0 bg-transparent" />
+            </div>
           ) : data?.length === 0 ? (
             <div className="p-6">
               <EmptyState
@@ -127,10 +156,10 @@ export function RobotTokensPage() {
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell className="font-mono text-xs">{t.username}</TableCell>
-                    <TableCell><Badge variant="secondary">{t.project_id.slice(0, 8)}</Badge></TableCell>
+                    <TableCell><Badge variant="secondary">{projectName(t.project_id)}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => revoke.mutate(t.id)} disabled={revoke.isPending}>
+                      <Button variant="ghost" size="icon" onClick={() => { setError(''); setRevokeToken(t) }} title="Revoke token">
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </TableCell>
@@ -148,26 +177,60 @@ export function RobotTokensPage() {
             <DialogTitle>New Robot Token</DialogTitle>
             <DialogDescription>Create a token for CI/CD or automated push/pull.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="robot-project">Project Name</Label>
-              <Input id="robot-project" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. demo" />
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="robot-project">Project</Label>
+                <Select id="robot-project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                  <SelectItem value="">Select a project</SelectItem>
+                  {projects?.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="robot-name">Token Name</Label>
+                <Input id="robot-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ci-demo" />
+                <p className="text-xs text-muted-foreground">1-32 characters: lowercase letters, numbers, hyphens and underscores</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Permissions</Label>
+                <div className="flex gap-4">
+                  {ACTIONS.map((a) => (
+                    <label key={a} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={actions.includes(a)}
+                        onChange={() => toggleAction(a)}
+                        className="h-4 w-4 rounded border-input accent-primary"
+                      />
+                      {a}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="robot-name">Token Name</Label>
-              <Input id="robot-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ci-demo" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="robot-perms">Permissions</Label>
-              <Input id="robot-perms" value={perms} onChange={(e) => setPerms(e.target.value)} placeholder="e.g. pull,push" />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={!projectId || !name || actions.length === 0 || create.isPending} loading={create.isPending}>
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!revokeToken} onOpenChange={(v) => !v && setRevokeToken(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revoke Token</DialogTitle>
+            <DialogDescription>Are you sure you want to revoke token "{revokeToken?.name}"? This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={() => create.mutate()} disabled={!projectName || !name || create.isPending} loading={create.isPending}>
-              Create
-            </Button>
+            <Button variant="outline" onClick={() => { setRevokeToken(null); setError('') }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => revoke.mutate(revokeToken!.id)} disabled={revoke.isPending} loading={revoke.isPending}>Revoke</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

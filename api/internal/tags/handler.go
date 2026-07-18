@@ -48,40 +48,45 @@ func NewHandler(
 	}
 }
 
-func (h *Handler) Routes(r chi.Router) {
-	r.Get("/", h.List)
-	r.Get("/{tag}", h.Get)
-	r.Delete("/{tag}", h.Delete)
-}
-
 func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
 	return authz.RequireMember(h.membersSvc.Repo(), h.sessionMgr, r, projectID)
-}
-
-func (h *Handler) requireProjectDeveloper(r *http.Request, projectID string) (*session.Claims, error) {
-	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "developer", "owner")
 }
 
 func (h *Handler) requireProjectOwner(r *http.Request, projectID string) (*session.Claims, error) {
 	return authz.RequireRole(h.membersSvc.Repo(), h.sessionMgr, r, projectID, "owner")
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+// resolve looks up the repository and checks project membership.
+func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, repoName string, ownerOnly bool) (*repositories.Repository, bool) {
+	if _, err := authz.RequireSession(h.sessionMgr, r); err != nil {
+		httpx.JSONError(w, err)
+		return nil, false
+	}
 	project := chi.URLParam(r, "project")
-	repoName := chi.URLParam(r, "repo")
 	fullName := project + "/" + repoName
 	repo, err := h.repoSvc.GetByFullName(r.Context(), fullName)
 	if err != nil {
 		httpx.JSONError(w, httpx.NotFound("repository not found"))
-		return
+		return nil, false
 	}
-	p, err := h.projectsSvc.GetByID(r.Context(), repo.ProjectID)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
-		return
+	if ownerOnly {
+		if _, err := h.requireProjectOwner(r, repo.ProjectID); err != nil {
+			httpx.JSONError(w, err)
+			return nil, false
+		}
+	} else {
+		if _, err := h.requireProjectMember(r, repo.ProjectID); err != nil {
+			httpx.JSONError(w, err)
+			return nil, false
+		}
 	}
-	if _, err := h.requireProjectMember(r, p.ID); err != nil {
-		httpx.JSONError(w, err)
+	return repo, true
+}
+
+// List handles GET /api/projects/{project}/repositories/{repo...}/tags
+func (h *Handler) List(w http.ResponseWriter, r *http.Request, repoName string) {
+	repo, ok := h.resolve(w, r, repoName, false)
+	if !ok {
 		return
 	}
 	list, err := h.service.ListByRepo(r.Context(), repo.ID)
@@ -92,24 +97,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, list)
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	project := chi.URLParam(r, "project")
-	repoName := chi.URLParam(r, "repo")
-	tagName := chi.URLParam(r, "tag")
-	fullName := project + "/" + repoName
-
-	repo, err := h.repoSvc.GetByFullName(r.Context(), fullName)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("repository not found"))
-		return
-	}
-	p, err := h.projectsSvc.GetByID(r.Context(), repo.ProjectID)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
-		return
-	}
-	if _, err := h.requireProjectMember(r, p.ID); err != nil {
-		httpx.JSONError(w, err)
+// Get handles GET /api/projects/{project}/repositories/{repo...}/tags/{tag}
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request, repoName, tagName string) {
+	repo, ok := h.resolve(w, r, repoName, false)
+	if !ok {
 		return
 	}
 	tag, err := h.service.Get(r.Context(), repo.ID, tagName)
@@ -120,27 +111,16 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, tag)
 }
 
-func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+// Delete handles DELETE /api/projects/{project}/repositories/{repo...}/tags/{tag}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request, repoName, tagName string) {
 	project := chi.URLParam(r, "project")
-	repoName := chi.URLParam(r, "repo")
-	tagName := chi.URLParam(r, "tag")
 	fullName := project + "/" + repoName
 
-	repo, err := h.repoSvc.GetByFullName(r.Context(), fullName)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("repository not found"))
+	repo, ok := h.resolve(w, r, repoName, true)
+	if !ok {
 		return
 	}
-	p, err := h.projectsSvc.GetByID(r.Context(), repo.ProjectID)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
-		return
-	}
-	claims, err := h.requireProjectOwner(r, p.ID)
-	if err != nil {
-		httpx.JSONError(w, err)
-		return
-	}
+	claims, _ := authz.RequireSession(h.sessionMgr, r)
 
 	tag, err := h.service.Get(r.Context(), repo.ID, tagName)
 	if err != nil {

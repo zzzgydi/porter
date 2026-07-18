@@ -16,8 +16,8 @@ type Tag struct {
 	MediaType    string         `json:"media_type"`
 	SizeBytes    int64          `json:"size_bytes"`
 	PushedBy     sql.NullString `json:"-"`
-	PushedAt     db.TimeString         `json:"pushed_at"`
-	UpdatedAt    db.TimeString         `json:"updated_at"`
+	PushedAt     db.TimeString  `json:"pushed_at"`
+	UpdatedAt    db.TimeString  `json:"updated_at"`
 	DeletedAt    *string        `json:"deleted_at,omitempty"`
 }
 

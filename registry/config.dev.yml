@@ -5,6 +5,7 @@ log:
 
 http:
   addr: :5000
+  secret: ${REGISTRY_HTTP_SECRET}
   headers:
     X-Content-Type-Options: [nosniff]
 
@@ -41,7 +42,7 @@ auth:
   token:
     realm: http://localhost:3000/api/registry/token
     service: localhost:5000
-    issuer: private-registry-auth
+    issuer: ${REGISTRY_TOKEN_ISSUER}
     rootcertbundle: /certs/auth.crt
     jwks: /certs/jwks.json
     signingalgorithms:

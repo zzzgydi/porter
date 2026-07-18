@@ -10,6 +10,7 @@ services:
       REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:-change_me_registry_http_secret}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-private-registry-auth}
     volumes:
       - ./registry/config.dev.yml:/etc/distribution/config.yml.template:ro
       - ./registry/certs:/certs:ro
@@ -61,16 +62,16 @@ services:
     container_name: registry-api
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${API_PORT:-3000}:3000"
     environment:
-      API_PORT: ${API_PORT}
+      API_PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REGISTRY_INTERNAL_URL: http://registry:5000
       REGISTRY_PUBLIC_URL: http://localhost:5000
       REGISTRY_SERVICE: localhost:5000
-      REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER}
+      REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-private-registry-auth}
       REGISTRY_TOKEN_REALM: http://localhost:3000/api/registry/token
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/secrets/auth.key
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
@@ -85,6 +86,9 @@ services:
       DEV_MODE: "true"
     volumes:
       - ./registry/certs/auth.key:/run/secrets/auth.key:ro
+      # Mounted so the API can generate jwks.json from auth.crt on startup
+      # when scripts/generate-auth-cert.sh was not run first.
+      - ./registry/certs:/certs
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,9 +107,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:4173:4173"
-    environment:
-      VITE_API_BASE_URL: http://localhost:3000
-      VITE_REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL:-http://localhost:5000}
     depends_on:
       - api
 

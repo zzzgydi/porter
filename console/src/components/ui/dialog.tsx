@@ -45,6 +45,15 @@ export function DialogContent({ children, className }: { children: ReactNode; cl
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, setOpen])
+
   if (!show) return null
   return (
     <div

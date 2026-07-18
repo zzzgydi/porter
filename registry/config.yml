@@ -5,6 +5,7 @@ log:
 
 http:
   addr: :5000
+  secret: ${REGISTRY_HTTP_SECRET}
   headers:
     X-Content-Type-Options: [nosniff]
 
@@ -69,7 +70,6 @@ notifications:
       timeout: 3s
       threshold: 10
       backoff: 5s
-      insecure: true
       ignore:
         actions:
           - pull

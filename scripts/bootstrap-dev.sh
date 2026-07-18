@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Ensure auth certs exist
+# Ensure auth certs exist (never overwrites existing certs)
 bash "${SCRIPT_DIR}/generate-auth-cert.sh"
 
 # Ensure .env exists
@@ -14,8 +14,8 @@ fi
 
 cd "${SCRIPT_DIR}/.."
 
-docker compose --profile dev up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 
 echo ""
 echo "Dev stack starting. Tail logs:"
-echo "  docker compose --profile dev logs -f"
+echo "  docker compose -f docker-compose.dev.yml logs -f"

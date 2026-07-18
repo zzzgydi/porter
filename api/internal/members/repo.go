@@ -11,13 +11,13 @@ import (
 )
 
 type Member struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
-	UserID    string `json:"user_id"`
-	Role      string `json:"role"`
+	ID        string        `json:"id"`
+	ProjectID string        `json:"project_id"`
+	UserID    string        `json:"user_id"`
+	Role      string        `json:"role"`
 	CreatedAt db.TimeString `json:"created_at"`
-	Email     string `json:"email,omitempty"`
-	Name      string `json:"name,omitempty"`
+	Email     string        `json:"email,omitempty"`
+	Name      string        `json:"name,omitempty"`
 }
 
 type Repo struct {
@@ -68,6 +68,14 @@ func (r *Repo) ListByProject(ctx context.Context, projectID string) ([]Member, e
 	return out, rows.Err()
 }
 
+// ErrNotMember is returned by GetRole when the user has no membership row.
+var ErrNotMember = errors.New("not a member")
+
+// IsNotMember reports whether err means the user is not a project member.
+func IsNotMember(err error) bool {
+	return errors.Is(err, ErrNotMember)
+}
+
 func (r *Repo) GetRole(ctx context.Context, projectID, userID string) (string, error) {
 	var role string
 	err := r.pool.QueryRow(ctx, `
@@ -75,7 +83,7 @@ func (r *Repo) GetRole(ctx context.Context, projectID, userID string) (string, e
 	`, projectID, userID).Scan(&role)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("not a member")
+			return "", ErrNotMember
 		}
 		return "", fmt.Errorf("db error: %w", err)
 	}

@@ -3,17 +3,18 @@ package users
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zzzgydi/porter/api/internal/db"
 )
 
 type User struct {
-	ID           string `json:"id"`
-	Email        string `json:"email"`
-	Name         string `json:"name"`
-	PasswordHash string `json:"-"`
-	Role         string `json:"role"`
+	ID           string        `json:"id"`
+	Email        string        `json:"email"`
+	Name         string        `json:"name"`
+	PasswordHash string        `json:"-"`
+	Role         string        `json:"role"`
 	CreatedAt    db.TimeString `json:"created_at"`
 	UpdatedAt    db.TimeString `json:"updated_at"`
 }
@@ -27,6 +28,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 }
 
 func (r *Repo) Create(ctx context.Context, u *User) error {
+	u.Email = strings.ToLower(strings.TrimSpace(u.Email))
 	return r.pool.QueryRow(ctx, `
 		INSERT INTO users (email, name, password_hash, role)
 		VALUES ($1, $2, $3, $4)
@@ -35,6 +37,7 @@ func (r *Repo) Create(ctx context.Context, u *User) error {
 }
 
 func (r *Repo) GetByEmail(ctx context.Context, email string) (*User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	var u User
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, email, name, password_hash, role, created_at, updated_at

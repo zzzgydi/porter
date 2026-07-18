@@ -26,16 +26,24 @@ export class APIError extends Error {
   }
 }
 
+// Registered by the auth provider to clear the session on any 401 response.
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(cb: (() => void) | null) {
+  onUnauthorized = cb;
+}
+
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
+    ...opts,
     headers: {
       "Content-Type": "application/json",
       ...opts?.headers,
     },
-    ...opts,
   });
   if (res.status === 401) {
+    onUnauthorized?.();
     throw new APIError(401, { msg: "Unauthorized" });
   }
   if (!res.ok) {

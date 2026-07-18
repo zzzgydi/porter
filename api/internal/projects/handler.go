@@ -2,6 +2,7 @@ package projects
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -34,9 +35,9 @@ func validateProjectVisibility(v string) error {
 }
 
 type Handler struct {
-	service     *Service
-	membersSvc  *members.Service
-	sessionMgr  *session.Manager
+	service    *Service
+	membersSvc *members.Service
+	sessionMgr *session.Manager
 }
 
 func NewHandler(service *Service, membersSvc *members.Service, sessionMgr *session.Manager) *Handler {
@@ -44,7 +45,7 @@ func NewHandler(service *Service, membersSvc *members.Service, sessionMgr *sessi
 }
 
 func (h *Handler) requireSession(r *http.Request) (*session.Claims, error) {
-	return session.FromRequest(h.sessionMgr, r)
+	return authz.RequireSession(h.sessionMgr, r)
 }
 
 func (h *Handler) requireProjectMember(r *http.Request, projectID string) (*session.Claims, error) {
@@ -70,7 +71,17 @@ func (h *Handler) Routes(r chi.Router) {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	claims, err := h.requireSession(r)
 	if err != nil {
-		httpx.JSONError(w, httpx.Unauthorized("session required"))
+		httpx.JSONError(w, err)
+		return
+	}
+	// Admins see every project, regular users only their memberships.
+	if claims.Role == "platform_admin" {
+		list, err := h.service.List(r.Context())
+		if err != nil {
+			httpx.JSONError(w, httpx.Internal("db error"))
+			return
+		}
+		httpx.JSON(w, http.StatusOK, list)
 		return
 	}
 	list, err := h.service.ListByUser(r.Context(), claims.UserID)
@@ -81,11 +92,25 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, list)
 }
 
-func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+// getProject looks up a project by name after verifying the session, so an
+// unauthenticated caller cannot probe project existence via 404 vs 401.
+func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) (*Project, bool) {
+	if _, err := h.requireSession(r); err != nil {
+		httpx.JSONError(w, err)
+		return nil, false
+	}
 	name := chi.URLParam(r, "project")
 	p, err := h.service.GetByName(r.Context(), name)
 	if err != nil {
 		httpx.JSONError(w, httpx.NotFound("project not found"))
+		return nil, false
+	}
+	return p, true
+}
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.getProject(w, r)
+	if !ok {
 		return
 	}
 	if _, err := h.requireProjectMember(r, p.ID); err != nil {
@@ -98,7 +123,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	claims, err := h.requireSession(r)
 	if err != nil {
-		httpx.JSONError(w, httpx.Unauthorized("session required"))
+		httpx.JSONError(w, err)
 		return
 	}
 	var req struct {
@@ -120,17 +145,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.service.Create(r.Context(), req.Name, req.DisplayName, req.Visibility, claims.UserID)
 	if err != nil {
-		httpx.JSONError(w, httpx.BadRequest("project already exists or invalid data"))
+		httpx.JSONError(w, httpx.Conflict("project already exists"))
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, p)
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "project")
-	p, err := h.service.GetByName(r.Context(), name)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
+	p, ok := h.getProject(w, r)
+	if !ok {
 		return
 	}
 	if _, err := h.requireProjectOwner(r, p.ID); err != nil {
@@ -138,15 +161,15 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		DisplayName string `json:"display_name"`
-		Visibility  string `json:"visibility"`
+		DisplayName *string `json:"display_name"`
+		Visibility  string  `json:"visibility"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.JSONError(w, httpx.BadRequest("invalid body"))
 		return
 	}
-	if req.Visibility != "" && req.Visibility != "private" && req.Visibility != "public" {
-		httpx.JSONError(w, httpx.BadRequest("visibility must be private or public"))
+	if err := validateProjectVisibility(req.Visibility); err != nil {
+		httpx.JSONError(w, err)
 		return
 	}
 	if err := h.service.Update(r.Context(), p.ID, req.DisplayName, req.Visibility); err != nil {
@@ -157,10 +180,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "project")
-	p, err := h.service.GetByName(r.Context(), name)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
+	p, ok := h.getProject(w, r)
+	if !ok {
 		return
 	}
 	if _, err := h.requireProjectOwner(r, p.ID); err != nil {
@@ -175,10 +196,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "project")
-	p, err := h.service.GetByName(r.Context(), name)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
+	p, ok := h.getProject(w, r)
+	if !ok {
 		return
 	}
 	if _, err := h.requireProjectMember(r, p.ID); err != nil {
@@ -194,10 +213,8 @@ func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "project")
-	p, err := h.service.GetByName(r.Context(), name)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
+	p, ok := h.getProject(w, r)
+	if !ok {
 		return
 	}
 	if _, err := h.requireProjectOwner(r, p.ID); err != nil {
@@ -214,17 +231,26 @@ func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := h.membersSvc.Add(r.Context(), p.ID, req.Email, req.Role)
 	if err != nil {
-		httpx.JSONError(w, httpx.BadRequest(err.Error()))
+		switch {
+		case errors.Is(err, members.ErrInvalidRole):
+			httpx.JSONError(w, httpx.BadRequest("invalid role"))
+		case errors.Is(err, members.ErrUserNotFound):
+			httpx.JSONError(w, httpx.NotFound("user not found"))
+		case errors.Is(err, members.ErrAlreadyMember):
+			httpx.JSONError(w, httpx.Conflict("user is already a member with that role"))
+		case errors.Is(err, members.ErrLastOwner):
+			httpx.JSONError(w, httpx.BadRequest("cannot downgrade the last owner"))
+		default:
+			httpx.JSONError(w, httpx.Internal("add member failed"))
+		}
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, m)
 }
 
 func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "project")
-	p, err := h.service.GetByName(r.Context(), name)
-	if err != nil {
-		httpx.JSONError(w, httpx.NotFound("project not found"))
+	p, ok := h.getProject(w, r)
+	if !ok {
 		return
 	}
 	if _, err := h.requireProjectOwner(r, p.ID); err != nil {
@@ -233,7 +259,14 @@ func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	}
 	userID := chi.URLParam(r, "userId")
 	if err := h.membersSvc.Remove(r.Context(), p.ID, userID); err != nil {
-		httpx.JSONError(w, httpx.Internal("remove failed"))
+		switch {
+		case errors.Is(err, members.ErrUserNotFound):
+			httpx.JSONError(w, httpx.NotFound("member not found"))
+		case errors.Is(err, members.ErrLastOwner):
+			httpx.JSONError(w, httpx.BadRequest("cannot remove the last owner"))
+		default:
+			httpx.JSONError(w, httpx.Internal("remove failed"))
+		}
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})

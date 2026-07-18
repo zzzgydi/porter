@@ -65,3 +65,10 @@ func (c *Client) MarkWebhookEvent(ctx context.Context, eventID string, ttl time.
 	key := "webhook:event:" + eventID
 	return c.SetNX(ctx, key, "1", ttl).Result()
 }
+
+// UnmarkWebhookEvent removes the dedup marker, e.g. when processing failed
+// and the event should be retried.
+func (c *Client) UnmarkWebhookEvent(ctx context.Context, eventID string) {
+	key := "webhook:event:" + eventID
+	_ = c.Del(ctx, key).Err()
+}

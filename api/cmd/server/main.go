@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/zzzgydi/porter/api/internal/audit"
-	"github.com/zzzgydi/porter/api/internal/session"
 	"github.com/zzzgydi/porter/api/internal/bootstrap"
 	"github.com/zzzgydi/porter/api/internal/config"
 	"github.com/zzzgydi/porter/api/internal/db"
@@ -24,6 +23,7 @@ import (
 	"github.com/zzzgydi/porter/api/internal/repositories"
 	"github.com/zzzgydi/porter/api/internal/robots"
 	"github.com/zzzgydi/porter/api/internal/router"
+	"github.com/zzzgydi/porter/api/internal/session"
 	"github.com/zzzgydi/porter/api/internal/tags"
 	"github.com/zzzgydi/porter/api/internal/users"
 )
@@ -139,22 +139,34 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	serveErr := make(chan error, 1)
 	go func() {
 		logger.Info("server starting", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("server error", "error", err)
-			os.Exit(1)
+			serveErr <- err
 		}
 	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+
+	select {
+	case err := <-serveErr:
+		logger.Error("server error", "error", err)
+		os.Exit(1)
+	case <-sig:
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+
+	// Flush any buffered audit events before exiting.
+	auditCtx, auditCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer auditCancel()
+	auditSvc.Shutdown(auditCtx)
+
 	logger.Info("server stopped")
 }
